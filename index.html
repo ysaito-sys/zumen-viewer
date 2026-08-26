@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover">
+  <meta name="theme-color" content="#0b5cab">
+  <title>溶接図面ビューア</title>
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --panel: #ffffff;
+      --line: #d5dbe1;
+      --text: #16202a;
+      --muted: #5d6b7a;
+      --accent: #0b5cab;
+      --warn: #b06000;
+      --err: #b3261e;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", system-ui, sans-serif;
+      -webkit-text-size-adjust: 100%;
+    }
+    body { display: flex; flex-direction: column; }
+
+    /* ---- ヘッダー ---- */
+    header {
+      flex: none;
+      background: var(--accent);
+      color: #fff;
+      padding: 10px 14px;
+      padding-top: calc(10px + env(safe-area-inset-top));
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    header h1 { margin: 0; font-size: 16px; font-weight: 700; letter-spacing: .02em; }
+    header .sub { font-size: 12px; opacity: .85; }
+
+    /* ---- 検索バー ---- */
+    .searchbar {
+      flex: none;
+      display: flex;
+      gap: 8px;
+      padding: 10px 10px 8px;
+      background: var(--panel);
+    }
+    .searchbar input {
+      flex: 1 1 auto;
+      min-width: 0;
+      font-size: 18px;
+      padding: 12px 14px;
+      border: 2px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--text);
+    }
+    .searchbar input:focus { outline: none; border-color: var(--accent); }
+
+    .scanbar {
+      flex: none;
+      display: flex;
+      gap: 8px;
+      padding: 0 10px 10px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+    }
+    .scanbar button, .scanbar .btnlike { flex: 1 1 0; }
+
+    button, .btnlike {
+      font-family: inherit;
+      font-size: 16px;
+      font-weight: 700;
+      padding: 12px 16px;
+      border: none;
+      border-radius: 8px;
+      background: var(--accent);
+      color: #fff;
+      cursor: pointer;
+      white-space: nowrap;
+      min-height: 48px;          /* 手袋でも押せる大きさ */
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      -webkit-tap-highlight-color: transparent;
+    }
+    button:active, .btnlike:active { transform: translateY(1px); }
+    button.ghost, .btnlike.ghost {
+      background: #fff;
+      color: var(--accent);
+      border: 2px solid var(--accent);
+    }
+    button:disabled { opacity: .5; cursor: default; }
+
+    /* ラベルをボタンに見せてファイル選択を開くため、input 自体は隠す */
+    .visually-hidden {
+      position: absolute;
+      width: 1px; height: 1px;
+      padding: 0; margin: -1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    /* ---- カメラ ---- */
+    #scanWrap { flex: none; display: none; background: #000; position: relative; }
+    #scanWrap.open { display: block; }
+    #reader { width: 100%; }
+    #reader video { width: 100% !important; display: block; }
+    .scanHint {
+      position: absolute;
+      left: 0; right: 0; bottom: 0;
+      padding: 8px 12px;
+      background: rgba(0,0,0,.6);
+      color: #fff;
+      font-size: 13px;
+      text-align: center;
+    }
+
+    /* ---- 状態メッセージ ---- */
+    #status {
+      flex: none;
+      display: none;
+      padding: 10px 14px;
+      font-size: 15px;
+      font-weight: 700;
+      border-bottom: 1px solid var(--line);
+    }
+    #status.show { display: block; }
+    #status.err  { background: #fdecea; color: var(--err); }
+    #status.warn { background: #fff4e5; color: var(--warn); }
+    #status.info { background: #e8f1fb; color: var(--accent); }
+
+    /* ---- 「もしかして」候補 ---- */
+    #suggest {
+      flex: none;
+      display: none;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 8px 10px;
+      background: #fff8e8;
+      border-bottom: 1px solid var(--line);
+    }
+    #suggest.show { display: flex; }
+    #suggest .label { width: 100%; font-size: 13px; font-weight: 700; color: var(--warn); }
+    #suggest .chip { background: #fff; border-color: var(--warn); }
+
+    /* ---- 図番情報 ---- */
+    #info {
+      flex: none;
+      display: none;
+      padding: 10px 14px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+    }
+    #info.show { display: block; }
+    .zuban { font-size: 24px; font-weight: 800; letter-spacing: .02em; line-height: 1.2; }
+    .zubanName { font-size: 16px; color: var(--muted); margin-top: 2px; }
+    .specs {
+      display: flex; flex-wrap: wrap;
+      gap: 6px 14px; margin-top: 8px;
+      font-size: 13px; color: var(--muted);
+    }
+    .specs b { color: var(--text); font-weight: 700; }
+    .variants { margin-top: 8px; font-size: 13px; color: var(--muted); }
+    .scanned {
+      margin-top: 6px;
+      font-size: 11px;
+      color: #8b97a3;
+      font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    }
+
+    /* ---- 履歴 ---- */
+    #history {
+      flex: none;
+      display: none;
+      gap: 6px;
+      padding: 8px 10px;
+      overflow-x: auto;
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+      white-space: nowrap;
+      -webkit-overflow-scrolling: touch;
+    }
+    #history.show { display: flex; }
+
+    .chip {
+      flex: none;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: #eaeef3;
+      color: var(--text);
+      border: 1px solid var(--line);
+      cursor: pointer;
+      min-height: 0;
+    }
+
+    /* ---- PDF 表示 ---- */
+    #viewer { flex: 1 1 auto; min-height: 0; position: relative; background: #52565c; }
+    #pdf { width: 100%; height: 100%; border: 0; display: none; }
+    #pdf.show { display: block; }
+
+    #placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      color: #cfd4da;
+      text-align: center;
+      padding: 20px;
+    }
+    #placeholder.hide { display: none; }
+    #placeholder .big { font-size: 46px; }
+    #placeholder p { margin: 0; font-size: 15px; line-height: 1.7; }
+    #placeholder .note { font-size: 12px; opacity: .75; margin-top: 4px; }
+
+    /* ---- フッター ---- */
+    footer {
+      flex: none;
+      display: none;
+      gap: 8px;
+      padding: 8px 10px;
+      padding-bottom: calc(8px + env(safe-area-inset-bottom));
+      background: var(--panel);
+      border-top: 1px solid var(--line);
+    }
+    footer.show { display: flex; }
+    footer button { flex: 1 1 0; font-size: 14px; padding: 10px; min-height: 44px; }
+
+    @media (min-width: 800px) {
+      header h1 { font-size: 18px; }
+      .searchbar input { font-size: 20px; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>溶接図面ビューア</h1>
+    <span class="sub">柱・溶接工程</span>
+  </header>
+
+  <div class="searchbar">
+    <input id="q" type="text" inputmode="latin" autocomplete="off" autocapitalize="characters"
+           placeholder="図番を入力（例: A5-0921）">
+    <button id="btnSearch">検索</button>
+  </div>
+
+  <div class="scanbar">
+    <button id="btnScan" class="ghost">カメラで読取</button>
+    <label class="btnlike ghost" for="camFile">写真で読取</label>
+    <input type="file" id="camFile" accept="image/*" capture="environment" class="visually-hidden">
+  </div>
+
+  <div id="history"></div>
+
+  <div id="scanWrap">
+    <div id="reader"></div>
+    <div class="scanHint">QR コードを枠内に合わせてください</div>
+  </div>
+
+  <div id="status"></div>
+  <div id="suggest"></div>
+
+  <div id="info">
+    <div class="zuban" id="infoZuban"></div>
+    <div class="zubanName" id="infoName"></div>
+    <div class="specs" id="infoSpecs"></div>
+    <div class="variants" id="infoVariants"></div>
+    <div class="scanned" id="infoScanned"></div>
+  </div>
+
+  <div id="viewer">
+    <iframe id="pdf" title="図面PDF" allow="fullscreen"></iframe>
+    <div id="placeholder">
+      <div class="big">図面</div>
+      <p>
+        「カメラで読取」で QR をスキャンするか、<br>
+        上の欄に図番を入力してください。
+      </p>
+      <p class="note">
+        図面が表示されない時は、この端末が<br>
+        会社の Google アカウントにログインしているか確認してください。
+      </p>
+    </div>
+  </div>
+
+  <footer id="actions">
+    <button id="btnOpenDrive" class="ghost">Drive で開く</button>
+    <button id="btnRescan">続けて読取</button>
+  </footer>
+
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script>
+  (function () {
+    'use strict';
+
+    // ===================================================================
+    // 図番の検索窓口（GAS の Web アプリ）
+    // このページは GitHub Pages に置かれ、iframe の外で動くため
+    // iPhone / iPad でもカメラが使えます。データだけを GAS に問い合わせます。
+    // ===================================================================
+    var API_URL = 'https://script.google.com/macros/s/AKfycbyWwUYgqajwvYeOTNkA-SAm5vVO5fx8cYSaduGjZxUJ9fFtdd7dOEu4X7r39jC8nmcfLw/exec';
+
+    var el = {
+      q:        document.getElementById('q'),
+      btnSearch:document.getElementById('btnSearch'),
+      btnScan:  document.getElementById('btnScan'),
+      camFile:  document.getElementById('camFile'),
+      scanWrap: document.getElementById('scanWrap'),
+      status:   document.getElementById('status'),
+      suggest:  document.getElementById('suggest'),
+      info:     document.getElementById('info'),
+      zuban:    document.getElementById('infoZuban'),
+      name:     document.getElementById('infoName'),
+      specs:    document.getElementById('infoSpecs'),
+      variants: document.getElementById('infoVariants'),
+      scanned:  document.getElementById('infoScanned'),
+      pdf:      document.getElementById('pdf'),
+      placeholder: document.getElementById('placeholder'),
+      actions:  document.getElementById('actions'),
+      btnDrive: document.getElementById('btnOpenDrive'),
+      btnRescan:document.getElementById('btnRescan'),
+      history:  document.getElementById('history')
+    };
+
+    var scanner = null;
+    var scanning = false;
+    var lastCode = '';
+    var lastCodeAt = 0;
+    var currentPdf = null;
+    var cameraBlocked = false;
+
+    // ===== メッセージ =====
+    function showStatus(text, kind) {
+      el.status.textContent = text;
+      el.status.className = 'show ' + (kind || 'info');
+    }
+    function hideStatus() { el.status.className = ''; }
+
+    function esc(s) {
+      return String(s).replace(/[&<>"]/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+      });
+    }
+
+    // ===== 検索 =====
+    function doSearch(code) {
+      code = (code || '').trim();
+      if (!code) return;
+
+      showStatus('検索中… ' + code, 'info');
+      el.btnSearch.disabled = true;
+
+      var url = API_URL + '?api=search&z=' + encodeURIComponent(code);
+
+      fetch(url)
+        .then(function (r) {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.json();
+        })
+        .then(onResult)
+        .catch(function () {
+          // 通信が塞がれている環境向けに JSONP で再挑戦する
+          jsonpSearch(code);
+        });
+    }
+
+    // CORS が使えない場合の逃げ道（script タグで読み込む方式）
+    function jsonpSearch(code) {
+      var cbName = 'zumenCb' + (new Date().getTime());
+      var script = document.createElement('script');
+      var done = false;
+
+      window[cbName] = function (res) {
+        done = true;
+        cleanup();
+        onResult(res);
+      };
+
+      function cleanup() {
+        try { delete window[cbName]; } catch (e) { window[cbName] = undefined; }
+        if (script.parentNode) script.parentNode.removeChild(script);
+      }
+
+      script.onerror = function () {
+        cleanup();
+        el.btnSearch.disabled = false;
+        showStatus('サーバーに接続できませんでした。通信環境を確認してください。', 'err');
+      };
+
+      script.src = API_URL + '?api=search&z=' + encodeURIComponent(code) + '&callback=' + cbName;
+      document.head.appendChild(script);
+
+      // 応答が無いまま終わった場合に備える
+      setTimeout(function () {
+        if (!done) {
+          cleanup();
+          el.btnSearch.disabled = false;
+          showStatus('応答がありませんでした。もう一度お試しください。', 'err');
+        }
+      }, 15000);
+    }
+
+    function onResult(res) {
+      el.btnSearch.disabled = false;
+
+      if (!res || !res.ok) {
+        showStatus((res && res.message) || '見つかりませんでした。', 'err');
+        el.info.className = '';
+        renderSuggest(res && res.similar);
+        return;
+      }
+      renderSuggest(null);
+
+      var rows = res.rows || [];
+      if (rows.length) {
+        var r = rows[0];
+        el.zuban.textContent = r.zuban;
+        el.name.textContent = r.name || '';
+
+        var specs = [];
+        if (r.material) specs.push('<span>材料 <b>' + esc(r.material) + '</b></span>');
+        if (r.length)   specs.push('<span>長さ <b>' + esc(r.length) + '</b></span>');
+        if (r.model)    specs.push('<span>機種 <b>' + esc(r.model) + '</b></span>');
+        if (r.qty)      specs.push('<span>数量 <b>' + esc(r.qty) + '</b></span>');
+        if (r.parts)    specs.push('<span>部品点数 <b>' + esc(r.parts) + '</b></span>');
+        el.specs.innerHTML = specs.join('');
+
+        if (rows.length > 1) {
+          var others = [];
+          for (var i = 1; i < rows.length; i++) others.push(rows[i].zuban);
+          el.variants.textContent = '同じ図面の別表記: ' + others.join(' / ');
+        } else {
+          el.variants.textContent = '';
+        }
+      } else {
+        el.zuban.textContent = res.key;
+        el.name.textContent = '';
+        el.specs.innerHTML = '';
+        el.variants.textContent = '';
+      }
+
+      el.scanned.textContent = '読取値: ' + res.query + '  →  照合キー: ' + res.key;
+      el.info.className = 'show';
+
+      if (res.pdf) {
+        currentPdf = res.pdf;
+        el.pdf.src = res.pdf.previewUrl;
+        el.pdf.className = 'show';
+        el.placeholder.className = 'hide';
+        el.actions.className = 'show';
+        hideStatus();
+        addHistory(rows.length ? rows[0].zuban : res.query);
+      } else {
+        currentPdf = null;
+        el.pdf.src = '';
+        el.pdf.className = '';
+        el.placeholder.className = '';
+        el.actions.className = '';
+        showStatus(res.message || 'PDF が見つかりませんでした。', 'warn');
+      }
+    }
+
+    // ===== 「もしかして」候補 =====
+    function renderSuggest(list) {
+      if (!list || !list.length) { el.suggest.className = ''; return; }
+
+      el.suggest.innerHTML = '';
+      var label = document.createElement('span');
+      label.className = 'label';
+      label.textContent = 'もしかして、この図番ですか？';
+      el.suggest.appendChild(label);
+
+      list.forEach(function (s) {
+        var b = document.createElement('button');
+        b.className = 'chip';
+        b.textContent = s.zuban + (s.name ? '  ' + s.name : '');
+        b.onclick = function () { el.q.value = s.zuban; doSearch(s.zuban); };
+        el.suggest.appendChild(b);
+      });
+      el.suggest.className = 'show';
+    }
+
+    // ===== カメラ（ライブ）=====
+    function startScan() {
+      if (scanning) { stopScan(); return; }
+
+      if (typeof Html5Qrcode === 'undefined') {
+        showStatus('スキャナを読み込めませんでした。通信環境を確認してください。', 'err');
+        return;
+      }
+
+      el.scanWrap.className = 'open';
+      el.btnScan.textContent = '停止';
+      showStatus('カメラを起動しています…', 'info');
+
+      if (!scanner) scanner = new Html5Qrcode('reader');
+
+      var config = {
+        fps: 10,
+        qrbox: { width: 260, height: 260 },
+        aspectRatio: 1.0,
+        experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+      };
+      if (typeof Html5QrcodeSupportedFormats !== 'undefined') {
+        config.formatsToSupport = [
+          Html5QrcodeSupportedFormats.QR_CODE,
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.DATA_MATRIX
+        ];
+      }
+
+      scanner.start({ facingMode: 'environment' }, config, onScanSuccess, function () { /* 毎フレーム呼ばれるので何もしない */ })
+        .then(function () {
+          scanning = true;
+          hideStatus();
+        })
+        .catch(function (err) {
+          scanning = false;
+          cameraBlocked = true;
+          el.scanWrap.className = '';
+          el.btnScan.textContent = 'カメラで読取';
+          showStatus(cameraErrorMessage(err), 'err');
+        });
+    }
+
+    function cameraErrorMessage(err) {
+      var s = String((err && (err.name || err.message)) || err);
+      if (s.indexOf('NotAllowed') >= 0 || s.indexOf('Permission') >= 0) {
+        return 'カメラの使用が許可されていません。ブラウザの設定でこのサイトのカメラを許可するか、「写真で読取」をお使いください。';
+      }
+      if (s.indexOf('NotFound') >= 0 || s.indexOf('DevicesNotFound') >= 0) {
+        return 'カメラが見つかりませんでした。「写真で読取」または図番の手入力をお使いください。';
+      }
+      if (s.indexOf('NotReadable') >= 0 || s.indexOf('TrackStart') >= 0) {
+        return 'カメラが他のアプリで使用中です。そのアプリを閉じてからお試しください。';
+      }
+      return 'カメラを起動できませんでした（' + s + '）。「写真で読取」をお使いください。';
+    }
+
+    function stopScan() {
+      if (!scanner || !scanning) {
+        el.scanWrap.className = '';
+        el.btnScan.textContent = 'カメラで読取';
+        return;
+      }
+      scanner.stop().then(finish).catch(finish);
+
+      function finish() {
+        scanning = false;
+        el.scanWrap.className = '';
+        el.btnScan.textContent = 'カメラで読取';
+      }
+    }
+
+    function onScanSuccess(decodedText) {
+      var now = new Date().getTime();
+      if (decodedText === lastCode && now - lastCodeAt < 2000) return;   // 同じコードの連続読みを無視
+      lastCode = decodedText;
+      lastCodeAt = now;
+
+      buzz();
+      el.q.value = decodedText;
+      stopScan();
+      doSearch(decodedText);
+    }
+
+    function buzz() {
+      if (navigator.vibrate) { try { navigator.vibrate(60); } catch (e) {} }
+    }
+
+    // ===== 写真から読み取る（カメラが使えない時の保険）=====
+    function decodePhoto(file) {
+      if (!file) return;
+      showStatus('画像を解析しています…', 'info');
+      if (scanning) stopScan();
+
+      if (window.BarcodeDetector && window.createImageBitmap) {
+        try {
+          var det = new BarcodeDetector();
+          createImageBitmap(file)
+            .then(function (bmp) { return det.detect(bmp); })
+            .then(function (codes) {
+              if (codes && codes.length) { onPhotoDecoded(codes[0].rawValue); }
+              else { decodePhotoFallback(file); }
+            })
+            .catch(function () { decodePhotoFallback(file); });
+          return;
+        } catch (e) { /* 下へ */ }
+      }
+      decodePhotoFallback(file);
+    }
+
+    function decodePhotoFallback(file) {
+      if (typeof Html5Qrcode === 'undefined') {
+        showStatus('読み取り機能を読み込めませんでした。図番を手入力してください。', 'err');
+        return;
+      }
+      if (!scanner) scanner = new Html5Qrcode('reader');
+
+      el.scanWrap.className = 'open';   // scanFile は表示領域を必要とする
+      scanner.scanFile(file, false)
+        .then(function (text) {
+          el.scanWrap.className = '';
+          onPhotoDecoded(text);
+        })
+        .catch(function () {
+          el.scanWrap.className = '';
+          showStatus('画像から QR を読み取れませんでした。ピントと明るさを確認して撮り直すか、図番を手入力してください。', 'err');
+        });
+    }
+
+    function onPhotoDecoded(text) {
+      buzz();
+      el.q.value = text;
+      doSearch(text);
+    }
+
+    // ===== 履歴（この端末にだけ残る）=====
+    function loadHistory() {
+      try {
+        var raw = localStorage.getItem('zumen_history');
+        return raw ? JSON.parse(raw) : [];
+      } catch (e) { return []; }
+    }
+    function addHistory(zuban) {
+      if (!zuban) return;
+      var list = loadHistory().filter(function (x) { return x !== zuban; });
+      list.unshift(zuban);
+      list = list.slice(0, 8);
+      try { localStorage.setItem('zumen_history', JSON.stringify(list)); } catch (e) {}
+      renderHistory();
+    }
+    function renderHistory() {
+      var list = loadHistory();
+      if (!list.length) { el.history.className = ''; return; }
+      el.history.innerHTML = '';
+      list.forEach(function (z) {
+        var b = document.createElement('button');
+        b.className = 'chip';
+        b.textContent = z;
+        b.onclick = function () { el.q.value = z; doSearch(z); };
+        el.history.appendChild(b);
+      });
+      el.history.className = 'show';
+    }
+
+    // ===== 操作の割り当て =====
+    el.btnSearch.onclick = function () { doSearch(el.q.value); };
+    el.btnScan.onclick   = startScan;
+    el.btnRescan.onclick = function () {
+      if (cameraBlocked) { el.camFile.click(); } else { startScan(); }
+    };
+    el.btnDrive.onclick  = function () {
+      if (currentPdf) window.open(currentPdf.viewUrl, '_blank');
+    };
+
+    el.camFile.onchange = function (e) {
+      var file = e.target.files && e.target.files[0];
+      decodePhoto(file);
+      e.target.value = '';   // 同じ写真を続けて撮れるようにする
+    };
+
+    // Enter で検索（ハンディバーコードリーダーにも対応）
+    el.q.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); doSearch(el.q.value); }
+    });
+
+    // ===== 起動時 =====
+    renderHistory();
+
+    // URL に ?z=A5-0921 が付いていれば、その図面をすぐ開く
+    var m = location.search.match(/[?&]z=([^&]+)/);
+    if (m) {
+      var initial = decodeURIComponent(m[1].replace(/\+/g, ' '));
+      el.q.value = initial;
+      doSearch(initial);
+    } else {
+      el.q.focus();
+    }
+  })();
+  </script>
+</body>
+</html>
