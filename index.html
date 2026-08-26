@@ -127,6 +127,43 @@
       text-align: center;
     }
 
+    /* ---- カメラ操作（ズーム・ライト）---- */
+    /* 指示書の QR は小さいので、寄れないと読めない。ズームが要になる。 */
+    #camCtrl {
+      position: absolute;
+      left: 0; right: 0; bottom: 31px;
+      display: none;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      background: rgba(0,0,0,.55);
+    }
+    #camCtrl.show { display: flex; }
+    #camCtrl input[type=range] {
+      flex: 1 1 auto;
+      min-width: 0;
+      height: 32px;
+      accent-color: #fff;
+    }
+    #camCtrl button {
+      flex: none;
+      min-height: 36px;
+      padding: 6px 12px;
+      font-size: 13px;
+      background: rgba(255,255,255,.92);
+      color: var(--text);
+      border-radius: 6px;
+    }
+    #zoomLabel {
+      flex: none;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      min-width: 44px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
     /* ---- 状態メッセージ ---- */
     #status {
       flex: none;
@@ -271,7 +308,12 @@
 
   <div id="scanWrap">
     <div id="reader"></div>
-    <div class="scanHint">QR コードを枠内に合わせてください</div>
+    <div id="camCtrl">
+      <button id="btnTorch" type="button">ライト</button>
+      <input type="range" id="zoom" min="1" max="5" step="0.1" value="1" aria-label="ズーム">
+      <span id="zoomLabel">1.0x</span>
+    </div>
+    <div class="scanHint">QR を枠いっぱいに写すと読み取れます</div>
   </div>
 
   <div id="status"></div>
@@ -323,6 +365,10 @@
       btnScan:  document.getElementById('btnScan'),
       camFile:  document.getElementById('camFile'),
       scanWrap: document.getElementById('scanWrap'),
+      camCtrl:  document.getElementById('camCtrl'),
+      btnTorch: document.getElementById('btnTorch'),
+      zoom:     document.getElementById('zoom'),
+      zoomLabel:document.getElementById('zoomLabel'),
       status:   document.getElementById('status'),
       suggest:  document.getElementById('suggest'),
       info:     document.getElementById('info'),
@@ -514,9 +560,24 @@
 
       var config = {
         fps: 10,
-        qrbox: { width: 260, height: 260 },
+
+        // 読み取り枠は画面の 65% の正方形。
+        // 小さい QR でも「枠いっぱいに写す」目安になるようにしている。
+        qrbox: function (vw, vh) {
+          var size = Math.floor(Math.min(vw, vh) * 0.65);
+          return { width: size, height: size };
+        },
         aspectRatio: 1.0,
-        experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+        experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+
+        // 指示書の QR は小さいので、カメラの解像度を上げないと潰れて読めない。
+        // 既定では 640x480 程度になることがあるため、明示的に高解像度を要求する。
+        videoConstraints: {
+          facingMode: 'environment',
+          width:  { ideal: 1920 },
+          height: { ideal: 1080 },
+          advanced: [{ focusMode: 'continuous' }]
+        }
       };
       if (typeof Html5QrcodeSupportedFormats !== 'undefined') {
         config.formatsToSupport = [
@@ -531,6 +592,7 @@
         .then(function () {
           scanning = true;
           hideStatus();
+          setupCameraControls();
         })
         .catch(function (err) {
           scanning = false;
@@ -539,6 +601,65 @@
           el.btnScan.textContent = 'カメラで読取';
           showStatus(cameraErrorMessage(err), 'err');
         });
+    }
+
+    // ===== カメラのズーム・ライト =====
+    // 小さい QR に寄れないのが最大の壁なので、ズームを使えるようにする。
+    // 端末が対応していない場合は、その操作だけ隠す（動作には影響しない）。
+    function setupCameraControls() {
+      var shown = false;
+
+      try {
+        var caps = scanner.getRunningTrackCameraCapabilities();
+
+        // --- ズーム ---
+        var zoomCap = caps.zoomFeature && caps.zoomFeature();
+        if (zoomCap && zoomCap.isSupported()) {
+          var min = zoomCap.min(), max = zoomCap.max(), step = zoomCap.step();
+          el.zoom.min = min;
+          el.zoom.max = max;
+          el.zoom.step = step || 0.1;
+
+          // 小さい QR 前提なので、最初から 2 倍まで寄せておく
+          var initial = Math.min(2, max);
+          el.zoom.value = initial;
+          zoomCap.apply(initial);
+          el.zoomLabel.textContent = initial.toFixed(1) + 'x';
+
+          el.zoom.oninput = function () {
+            var v = parseFloat(el.zoom.value);
+            el.zoomLabel.textContent = v.toFixed(1) + 'x';
+            try { zoomCap.apply(v); } catch (e) {}
+          };
+          el.zoom.style.display = '';
+          el.zoomLabel.style.display = '';
+          shown = true;
+        } else {
+          el.zoom.style.display = 'none';
+          el.zoomLabel.style.display = 'none';
+        }
+
+        // --- ライト（暗い場所や、光沢紙で読みにくい時に）---
+        var torchCap = caps.torchFeature && caps.torchFeature();
+        if (torchCap && torchCap.isSupported()) {
+          el.btnTorch.style.display = '';
+          el.btnTorch.textContent = 'ライト ON';
+          el.btnTorch.onclick = function () {
+            var next = !torchCap.value();
+            try {
+              torchCap.apply(next);
+              el.btnTorch.textContent = next ? 'ライト OFF' : 'ライト ON';
+            } catch (e) {}
+          };
+          shown = true;
+        } else {
+          el.btnTorch.style.display = 'none';
+        }
+      } catch (e) {
+        // この機能に対応していない端末では、静かに諦める
+      }
+
+      el.camCtrl.className = shown ? 'show' : '';
     }
 
     function cameraErrorMessage(err) {
@@ -566,6 +687,7 @@
       function finish() {
         scanning = false;
         el.scanWrap.className = '';
+        el.camCtrl.className = '';
         el.btnScan.textContent = 'カメラで読取';
       }
     }
@@ -622,9 +744,89 @@
           onPhotoDecoded(text);
         })
         .catch(function () {
-          el.scanWrap.className = '';
-          showStatus('画像から QR を読み取れませんでした。ピントと明るさを確認して撮り直すか、図番を手入力してください。', 'err');
+          // 写真全体では読めなかった。
+          // QR が小さく写っている場合は、切り出して拡大すると読めることがある。
+          decodePhotoTiles(file);
         });
+    }
+
+    // 写真を格子状に切り出し、1 枚ずつ拡大して読み取りを試す。
+    // 指示書の QR は紙面のごく一部なので、全体を一度に見ると小さすぎて認識できない。
+    function decodePhotoTiles(file) {
+      var img = new Image();
+      var url = URL.createObjectURL(file);
+
+      img.onload = function () {
+        URL.revokeObjectURL(url);
+
+        var GRID = 3;      // 3x3 に分割
+        var OVERLAP = 0.3; // 境界にまたがる QR を拾うため、隣と 30% 重ねる
+        var tw = img.width / GRID;
+        var th = img.height / GRID;
+        var center = (GRID - 1) / 2;
+        var regions = [];
+
+        for (var y = 0; y < GRID; y++) {
+          for (var x = 0; x < GRID; x++) {
+            regions.push({
+              sx: Math.max(0, (x - OVERLAP) * tw),
+              sy: Math.max(0, (y - OVERLAP) * th),
+              sw: Math.min(img.width,  tw * (1 + 2 * OVERLAP)),
+              sh: Math.min(img.height, th * (1 + 2 * OVERLAP)),
+              d:  Math.abs(x - center) + Math.abs(y - center)
+            });
+          }
+        }
+        // 中央に近いところから試す（狙って撮れば中央付近にあるはず）
+        regions.sort(function (a, b) { return a.d - b.d; });
+
+        tryRegion(0);
+
+        function tryRegion(i) {
+          if (i >= regions.length) {
+            el.scanWrap.className = '';
+            showStatus('画像から QR を読み取れませんでした。QR に近づけて、画面いっぱいに写して撮り直してください。図番の手入力でも検索できます。', 'err');
+            return;
+          }
+
+          showStatus('画像を解析しています… (' + (i + 1) + '/' + regions.length + ')', 'info');
+
+          var r = regions[i];
+          var scale = 2;   // 切り出したうえで 2 倍に拡大する
+          var canvas = document.createElement('canvas');
+          canvas.width  = Math.round(r.sw * scale);
+          canvas.height = Math.round(r.sh * scale);
+
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(img, r.sx, r.sy, r.sw, r.sh, 0, 0, canvas.width, canvas.height);
+
+          canvas.toBlob(function (blob) {
+            if (!blob) { tryRegion(i + 1); return; }
+
+            var part;
+            try {
+              part = new File([blob], 'tile.png', { type: 'image/png' });
+            } catch (e) {
+              part = blob;   // File が使えない環境では Blob のまま渡す
+            }
+
+            scanner.scanFile(part, false)
+              .then(function (text) {
+                el.scanWrap.className = '';
+                onPhotoDecoded(text);
+              })
+              .catch(function () { tryRegion(i + 1); });
+          }, 'image/png');
+        }
+      };
+
+      img.onerror = function () {
+        URL.revokeObjectURL(url);
+        el.scanWrap.className = '';
+        showStatus('画像を読み込めませんでした。', 'err');
+      };
+
+      img.src = url;
     }
 
     function onPhotoDecoded(text) {
