@@ -286,19 +286,64 @@
       align-items: center;
       gap: 6px;
     }
-    #worker {
-      font-family: inherit;
+    #workerBtn {
       font-size: 14px;
       font-weight: 700;
-      padding: 8px 10px;
+      padding: 8px 12px;
+      min-height: 40px;
       border-radius: 8px;
       border: 2px solid rgba(255,255,255,.6);
       background: rgba(255,255,255,.15);
       color: #fff;
-      max-width: 42vw;
+      max-width: 46vw;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      display: block;
     }
-    #worker option { color: var(--text); }
-    #worker.unset { border-color: #ffd24d; background: rgba(255,210,77,.25); }
+    #workerBtn.unset {
+      border-color: #ffd24d;
+      background: rgba(255,210,77,.25);
+    }
+
+    /* ---- 作業者を選ぶ一覧（起動時に必ず出す）---- */
+    #workerList {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    #workerList button {
+      width: 100%;
+      min-height: 62px;
+      font-size: 20px;
+      justify-content: flex-start;
+      padding-left: 20px;
+    }
+    #workerList button.recent {
+      border-width: 3px;
+      background: #eef5fd;
+    }
+    #workerList .badge {
+      margin-left: auto;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent);
+      background: #fff;
+      border: 1px solid var(--accent);
+      border-radius: 999px;
+      padding: 3px 10px;
+    }
+    #workerEmpty {
+      margin-top: 14px;
+      padding: 14px;
+      background: #fff8e8;
+      border: 1px solid var(--warn);
+      border-radius: 8px;
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--text);
+    }
 
     /* ---- 作業中バー ---- */
     #workBar {
@@ -461,11 +506,22 @@
   <header>
     <h1>溶接図面ビューア</h1>
     <div id="workerWrap">
-      <select id="worker" class="unset" aria-label="作業者">
-        <option value="">作業者を選ぶ</option>
-      </select>
+      <button type="button" id="workerBtn" class="unset">作業者を選ぶ</button>
     </div>
   </header>
+
+  <!-- ===== 作業者の選択（起動時に必ず出す）===== -->
+  <div class="panel" id="workerPanel">
+    <div class="sheetbox">
+      <h2>作業者を選んでください</h2>
+      <div class="targetSub">記録に残る名前です。担当が代わったら選び直してください。</div>
+      <div id="workerList"></div>
+      <div id="workerEmpty" style="display:none"></div>
+      <div class="row">
+        <button type="button" id="btnWorkerLater" class="ghost">あとで選ぶ（図面だけ見る）</button>
+      </div>
+    </div>
+  </div>
 
   <!-- 作業中に出るバー。経過時間が動き、ここから完了に進む -->
   <div id="workBar">
@@ -630,7 +686,11 @@
       history:  document.getElementById('history'),
 
       // 作業ログ関連
-      worker:      document.getElementById('worker'),
+      workerBtn:   document.getElementById('workerBtn'),
+      workerPanel: document.getElementById('workerPanel'),
+      workerList:  document.getElementById('workerList'),
+      workerEmpty: document.getElementById('workerEmpty'),
+      btnWorkerLater: document.getElementById('btnWorkerLater'),
       workBar:     document.getElementById('workBar'),
       wbZuban:     document.getElementById('wbZuban'),
       wbSub:       document.getElementById('wbSub'),
@@ -675,6 +735,8 @@
     var photos      = [];     // 撮った写真 [{ dataUrl }]
     var judge       = '';     // 'OK' / 'NG'
     var elapsedTimer = null;
+    var currentWorker = '';   // いま選ばれている作業者
+    var workerList  = [];     // シートから取った氏名の一覧
 
     var STORE_WORK   = 'zumen_currentWork';
     var STORE_WORKER = 'zumen_worker';
@@ -1170,35 +1232,90 @@
     }
 
     // ---- 作業者 ----
+    // 部署共用の端末なので、起動時に必ず選ばせる。
+    // 前回の人を先頭に出しておき、同じ人なら 1 タップで済むようにしている。
     function loadWorkers() {
       fetch(API_URL + '?api=workers')
         .then(function (r) { return r.json(); })
         .then(function (res) {
-          if (!res || !res.ok) return;
+          workerList = (res && res.ok && res.workers) ? res.workers : [];
+
+          // 作業の途中で開き直した場合は、その作業者を引き継ぐ（選び直させない）
+          if (currentWork && currentWork.worker) {
+            setWorker(currentWork.worker);
+            return;
+          }
+
           var saved = '';
           try { saved = localStorage.getItem(STORE_WORKER) || ''; } catch (e) {}
-
-          el.worker.innerHTML = '<option value="">作業者を選ぶ</option>';
-          res.workers.forEach(function (w) {
-            var o = document.createElement('option');
-            o.value = w;
-            o.textContent = w;
-            if (w === saved) o.selected = true;
-            el.worker.appendChild(o);
-          });
-          updateWorkerStyle();
+          openWorkerPanel(saved);
         })
-        .catch(function () { /* 取れなくても図面は見られるので黙って続ける */ });
+        .catch(function () {
+          // 一覧が取れなくても図面は見られる。作業者は未選択のままにする。
+          setWorker('');
+        });
     }
 
-    function updateWorkerStyle() {
-      el.worker.className = el.worker.value ? '' : 'unset';
+    function setWorker(w) {
+      currentWorker = w || '';
+      el.workerBtn.textContent = currentWorker || '作業者を選ぶ';
+      el.workerBtn.className = currentWorker ? '' : 'unset';
+      try { localStorage.setItem(STORE_WORKER, currentWorker); } catch (e) {}
     }
 
-    el.worker.onchange = function () {
-      try { localStorage.setItem(STORE_WORKER, el.worker.value); } catch (e) {}
-      updateWorkerStyle();
-    };
+    function openWorkerPanel(preferred) {
+      el.workerList.innerHTML = '';
+
+      if (!workerList.length) {
+        el.workerList.style.display = 'none';
+        el.workerEmpty.style.display = '';
+        el.workerEmpty.innerHTML =
+          '作業者が登録されていません。<br>'
+          + 'スプレッドシートの<b>「作業者」シート</b>に氏名を入れてから、'
+          + 'この画面を開き直してください。';
+        el.workerPanel.className = 'panel show';
+        return;
+      }
+
+      el.workerList.style.display = '';
+      el.workerEmpty.style.display = 'none';
+
+      // 前回の人を先頭へ
+      var names = workerList.slice();
+      if (preferred && names.indexOf(preferred) >= 0) {
+        names.splice(names.indexOf(preferred), 1);
+        names.unshift(preferred);
+      }
+
+      names.forEach(function (w) {
+        var b = document.createElement('button');
+        b.type = 'button';
+
+        if (w === preferred) {
+          b.className = 'ghost recent';
+          b.appendChild(document.createTextNode(w));
+          var badge = document.createElement('span');
+          badge.className = 'badge';
+          badge.textContent = '前回';
+          b.appendChild(badge);
+        } else {
+          b.className = 'ghost';
+          b.textContent = w;
+        }
+
+        b.onclick = function () {
+          setWorker(w);
+          el.workerPanel.className = 'panel';
+        };
+        el.workerList.appendChild(b);
+      });
+
+      el.workerPanel.className = 'panel show';
+    }
+
+    // ヘッダーの名前をタップすると、いつでも選び直せる
+    el.workerBtn.onclick = function () { openWorkerPanel(currentWorker); };
+    el.btnWorkerLater.onclick = function () { el.workerPanel.className = 'panel'; };
 
     // ---- 着手の確認パネル ----
     function openStartPanel(row) {
@@ -1228,8 +1345,8 @@
     el.btnViewOnly.onclick = closeStartPanel;
 
     el.btnStart.onclick = function () {
-      if (!el.worker.value) {
-        alert('先に画面右上で作業者を選んでください。');
+      if (!currentWorker) {
+        openWorkerPanel('');    // 未選択なら、その場で選ばせる
         return;
       }
       if (!pendingRow) return;
@@ -1240,7 +1357,7 @@
 
       apiPost({
         action: 'start',
-        worker: el.worker.value,
+        worker: currentWorker,
         zuban:  row.zuban,
         name:   row.name,
         model:  row.model,
@@ -1257,7 +1374,7 @@
           zuban: row.zuban,
           name:  row.name,
           qty:   qty,
-          worker: el.worker.value,
+          worker: currentWorker,
           startedAt: res.startedAt || (new Date().getTime())
         };
         saveWork();
@@ -1505,8 +1622,8 @@
 
     // ===== 起動時 =====
     renderHistory();
-    loadWorkers();    // 作業者プルダウンを埋める
-    restoreWork();    // 前回の作業が終わっていなければ復帰する
+    restoreWork();    // 先に復帰させる（作業中ならその作業者を引き継ぐため）
+    loadWorkers();    // 未着手なら、ここで作業者を選ばせる画面が出る
 
     // URL に ?z=A5-0921 が付いていれば、その図面をすぐ開く
     var m = location.search.match(/[?&]z=([^&]+)/);
