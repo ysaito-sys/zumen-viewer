@@ -279,9 +279,180 @@
     footer.show { display: flex; }
     footer button { flex: 1 1 0; font-size: 14px; padding: 10px; min-height: 44px; }
 
+    /* ---- 作業者の選択（ヘッダー内）---- */
+    #workerWrap {
+      flex: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    #worker {
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 700;
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 2px solid rgba(255,255,255,.6);
+      background: rgba(255,255,255,.15);
+      color: #fff;
+      max-width: 42vw;
+    }
+    #worker option { color: var(--text); }
+    #worker.unset { border-color: #ffd24d; background: rgba(255,210,77,.25); }
+
+    /* ---- 作業中バー ---- */
+    #workBar {
+      flex: none;
+      display: none;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      background: #0f7a3d;
+      color: #fff;
+    }
+    #workBar.show { display: flex; }
+    #workBar .info { flex: 1 1 auto; min-width: 0; }
+    #workBar .zb { font-size: 15px; font-weight: 800; }
+    #workBar .sub { font-size: 12px; opacity: .9; }
+    #workBar .elapsed {
+      flex: none;
+      font-size: 20px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+    #workBar button {
+      flex: none;
+      background: #fff;
+      color: #0f7a3d;
+      min-height: 44px;
+      padding: 10px 14px;
+    }
+
+    /* ---- パネル（着手確認・完了記録）---- */
+    .panel {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      display: none;
+      flex-direction: column;
+      background: rgba(16,24,32,.55);
+    }
+    .panel.show { display: flex; }
+    .panel .sheetbox {
+      margin-top: auto;
+      background: var(--panel);
+      border-radius: 16px 16px 0 0;
+      padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+      max-height: 92vh;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .panel h2 { margin: 0 0 4px; font-size: 17px; }
+    .panel .target { font-size: 20px; font-weight: 800; }
+    .panel .targetSub { font-size: 14px; color: var(--muted); margin-bottom: 14px; }
+    .panel .row { display: flex; gap: 10px; margin-top: 14px; }
+    .panel .row button { flex: 1 1 0; }
+    .panel .hint { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.6; }
+
+    /* ---- 本数のステッパー（現場で押しやすいよう大きく）---- */
+    .stepper {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      justify-content: center;
+      margin: 8px 0 4px;
+    }
+    .stepper button {
+      width: 68px;
+      height: 68px;
+      min-height: 68px;
+      border-radius: 50%;
+      font-size: 32px;
+      font-weight: 700;
+      padding: 0;
+      line-height: 1;
+    }
+    .stepper .value {
+      font-size: 40px;
+      font-weight: 800;
+      min-width: 90px;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+    .stepper .unit { font-size: 16px; color: var(--muted); }
+    .stepLabel { text-align: center; font-size: 13px; color: var(--muted); }
+
+    /* ---- 写真 ---- */
+    #photoList {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    #photoList .thumb {
+      position: relative;
+      width: 84px;
+      height: 84px;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      background: #eee;
+    }
+    #photoList .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    #photoList .thumb .del {
+      position: absolute;
+      top: 2px; right: 2px;
+      width: 26px; height: 26px; min-height: 26px;
+      padding: 0;
+      border-radius: 50%;
+      background: rgba(0,0,0,.6);
+      color: #fff;
+      font-size: 15px;
+      line-height: 1;
+    }
+
+    /* ---- 検査の OK / NG ---- */
+    .judge { display: flex; gap: 10px; margin-top: 8px; }
+    .judge button { flex: 1 1 0; min-height: 56px; font-size: 18px; }
+    .judge button.ok.on  { background: #1a7f45; color: #fff; border-color: #1a7f45; }
+    .judge button.ng.on  { background: var(--err); color: #fff; border-color: var(--err); }
+
+    .panel textarea {
+      width: 100%;
+      margin-top: 10px;
+      font-family: inherit;
+      font-size: 15px;
+      padding: 10px;
+      border: 2px solid var(--line);
+      border-radius: 8px;
+      resize: vertical;
+      min-height: 68px;
+    }
+    .panel label.fieldLabel {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--muted);
+      margin-top: 14px;
+    }
+
+    #saveProgress {
+      display: none;
+      margin-top: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    #saveProgress.show { display: block; }
+
     @media (min-width: 800px) {
       header h1 { font-size: 18px; }
       .searchbar input { font-size: 20px; }
+      .panel .sheetbox {
+        margin: auto;
+        max-width: 560px;
+        border-radius: 16px;
+      }
     }
   </style>
 </head>
@@ -289,8 +460,22 @@
 
   <header>
     <h1>溶接図面ビューア</h1>
-    <span class="sub">柱・溶接工程</span>
+    <div id="workerWrap">
+      <select id="worker" class="unset" aria-label="作業者">
+        <option value="">作業者を選ぶ</option>
+      </select>
+    </div>
   </header>
+
+  <!-- 作業中に出るバー。経過時間が動き、ここから完了に進む -->
+  <div id="workBar">
+    <div class="info">
+      <div class="zb" id="wbZuban"></div>
+      <div class="sub" id="wbSub"></div>
+    </div>
+    <div class="elapsed" id="wbElapsed">0:00</div>
+    <button id="btnFinish">完了</button>
+  </div>
 
   <div class="searchbar">
     <input id="q" type="text" inputmode="latin" autocomplete="off" autocapitalize="characters"
@@ -347,6 +532,66 @@
     <button id="btnRescan">続けて読取</button>
   </footer>
 
+  <!-- ===== 着手の確認（スキャン直後に出る）===== -->
+  <div class="panel" id="startPanel">
+    <div class="sheetbox">
+      <h2>この柱を始めますか？</h2>
+      <div class="target" id="spZuban"></div>
+      <div class="targetSub" id="spName"></div>
+
+      <div class="stepLabel">これから作る本数</div>
+      <div class="stepper">
+        <button type="button" id="qtyMinus" class="ghost" aria-label="1本減らす">−</button>
+        <span class="value" id="qtyValue">1</span>
+        <button type="button" id="qtyPlus" class="ghost" aria-label="1本増やす">＋</button>
+      </div>
+      <div class="stepLabel" id="spQtyHint"></div>
+
+      <div class="row">
+        <button type="button" id="btnStart">着手する</button>
+        <button type="button" id="btnViewOnly" class="ghost">図面を見るだけ</button>
+      </div>
+      <div class="hint">
+        「着手する」を押すと、この時刻が開始時間として記録されます。<br>
+        図面を確認したいだけの時は「図面を見るだけ」を選んでください。
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 完了の記録（写真・検査）===== -->
+  <div class="panel" id="finishPanel">
+    <div class="sheetbox">
+      <h2>完了の記録</h2>
+      <div class="target" id="fpZuban"></div>
+      <div class="targetSub" id="fpSub"></div>
+
+      <label class="fieldLabel">製品の写真（何枚でも追加できます）</label>
+      <button type="button" id="btnAddPhoto" class="ghost" style="width:100%">写真を撮る</button>
+      <input type="file" id="photoFile" accept="image/*" capture="environment" class="visually-hidden">
+      <div id="photoList"></div>
+
+      <label class="fieldLabel">検査</label>
+      <div class="judge">
+        <button type="button" id="btnOk" class="ghost ok">OK</button>
+        <button type="button" id="btnNg" class="ghost ng">NG</button>
+      </div>
+
+      <label class="fieldLabel" for="note">メモ（任意。NG のときは理由を残してください）</label>
+      <textarea id="note" placeholder="例: 溶接部にピンホール。手直し済み"></textarea>
+
+      <div id="saveProgress"></div>
+
+      <div class="row">
+        <button type="button" id="btnSaveFinish">記録して完了</button>
+        <button type="button" id="btnFinishBack" class="ghost">戻る</button>
+      </div>
+      <div class="hint">
+        写真は図番ごとのフォルダに保存され、シートから見返せます。<br>
+        送信前に自動で縮小するので、通信量はわずかです。
+      </div>
+    </div>
+  </div>
+
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script>
   (function () {
@@ -382,7 +627,38 @@
       actions:  document.getElementById('actions'),
       btnDrive: document.getElementById('btnOpenDrive'),
       btnRescan:document.getElementById('btnRescan'),
-      history:  document.getElementById('history')
+      history:  document.getElementById('history'),
+
+      // 作業ログ関連
+      worker:      document.getElementById('worker'),
+      workBar:     document.getElementById('workBar'),
+      wbZuban:     document.getElementById('wbZuban'),
+      wbSub:       document.getElementById('wbSub'),
+      wbElapsed:   document.getElementById('wbElapsed'),
+      btnFinish:   document.getElementById('btnFinish'),
+
+      startPanel:  document.getElementById('startPanel'),
+      spZuban:     document.getElementById('spZuban'),
+      spName:      document.getElementById('spName'),
+      spQtyHint:   document.getElementById('spQtyHint'),
+      qtyMinus:    document.getElementById('qtyMinus'),
+      qtyPlus:     document.getElementById('qtyPlus'),
+      qtyValue:    document.getElementById('qtyValue'),
+      btnStart:    document.getElementById('btnStart'),
+      btnViewOnly: document.getElementById('btnViewOnly'),
+
+      finishPanel: document.getElementById('finishPanel'),
+      fpZuban:     document.getElementById('fpZuban'),
+      fpSub:       document.getElementById('fpSub'),
+      btnAddPhoto: document.getElementById('btnAddPhoto'),
+      photoFile:   document.getElementById('photoFile'),
+      photoList:   document.getElementById('photoList'),
+      btnOk:       document.getElementById('btnOk'),
+      btnNg:       document.getElementById('btnNg'),
+      note:        document.getElementById('note'),
+      saveProgress:document.getElementById('saveProgress'),
+      btnSaveFinish: document.getElementById('btnSaveFinish'),
+      btnFinishBack: document.getElementById('btnFinishBack')
     };
 
     var scanner = null;
@@ -391,6 +667,17 @@
     var lastCodeAt = 0;
     var currentPdf = null;
     var cameraBlocked = false;
+
+    // ---- 作業ログの状態 ----
+    var currentWork = null;   // 進行中の作業 { logId, zuban, name, qty, worker, startedAt }
+    var pendingRow  = null;   // 着手確認中の図番情報（検索結果の 1 行目）
+    var pendingQty  = 1;      // ステッパーの値
+    var photos      = [];     // 撮った写真 [{ dataUrl }]
+    var judge       = '';     // 'OK' / 'NG'
+    var elapsedTimer = null;
+
+    var STORE_WORK   = 'zumen_currentWork';
+    var STORE_WORKER = 'zumen_worker';
 
     // ===== メッセージ =====
     function showStatus(text, kind) {
@@ -513,6 +800,10 @@
         el.actions.className = 'show';
         hideStatus();
         addHistory(rows.length ? rows[0].zuban : res.query);
+
+        // 図面が出たら、着手するか聞く。
+        // すでに別の作業が進行中のときは邪魔をしない（図面の参照とみなす）。
+        if (rows.length && !currentWork) openStartPanel(rows[0]);
       } else {
         currentPdf = null;
         el.pdf.src = '';
@@ -864,6 +1155,333 @@
       el.history.className = 'show';
     }
 
+    // ===================================================================
+    // 作業ログ（着手 → 完了）
+    // ===================================================================
+
+    // GAS へ書き込む。application/json だと事前確認が飛んで失敗するため
+    // text/plain で送り、サーバー側で JSON として読み直している。
+    function apiPost(payload) {
+      return fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      }).then(function (r) { return r.json(); });
+    }
+
+    // ---- 作業者 ----
+    function loadWorkers() {
+      fetch(API_URL + '?api=workers')
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+          if (!res || !res.ok) return;
+          var saved = '';
+          try { saved = localStorage.getItem(STORE_WORKER) || ''; } catch (e) {}
+
+          el.worker.innerHTML = '<option value="">作業者を選ぶ</option>';
+          res.workers.forEach(function (w) {
+            var o = document.createElement('option');
+            o.value = w;
+            o.textContent = w;
+            if (w === saved) o.selected = true;
+            el.worker.appendChild(o);
+          });
+          updateWorkerStyle();
+        })
+        .catch(function () { /* 取れなくても図面は見られるので黙って続ける */ });
+    }
+
+    function updateWorkerStyle() {
+      el.worker.className = el.worker.value ? '' : 'unset';
+    }
+
+    el.worker.onchange = function () {
+      try { localStorage.setItem(STORE_WORKER, el.worker.value); } catch (e) {}
+      updateWorkerStyle();
+    };
+
+    // ---- 着手の確認パネル ----
+    function openStartPanel(row) {
+      pendingRow = row;
+      pendingQty = 1;
+
+      el.spZuban.textContent = row.zuban;
+      el.spName.textContent  = row.name || '';
+      el.spQtyHint.textContent = row.qty ? '（指示書上の数量: ' + row.qty + '）' : '';
+      el.qtyValue.textContent = pendingQty;
+
+      el.startPanel.className = 'panel show';
+    }
+
+    function closeStartPanel() {
+      el.startPanel.className = 'panel';
+      pendingRow = null;
+    }
+
+    function setQty(n) {
+      pendingQty = Math.min(99, Math.max(1, n));
+      el.qtyValue.textContent = pendingQty;
+    }
+
+    el.qtyMinus.onclick = function () { setQty(pendingQty - 1); };
+    el.qtyPlus.onclick  = function () { setQty(pendingQty + 1); };
+    el.btnViewOnly.onclick = closeStartPanel;
+
+    el.btnStart.onclick = function () {
+      if (!el.worker.value) {
+        alert('先に画面右上で作業者を選んでください。');
+        return;
+      }
+      if (!pendingRow) return;
+
+      var row = pendingRow;
+      var qty = pendingQty;
+      el.btnStart.disabled = true;
+
+      apiPost({
+        action: 'start',
+        worker: el.worker.value,
+        zuban:  row.zuban,
+        name:   row.name,
+        model:  row.model,
+        qty:    qty,
+        stdTime: row.stdTime || ''
+      }).then(function (res) {
+        el.btnStart.disabled = false;
+        if (!res || !res.ok) {
+          alert('着手を記録できませんでした。' + ((res && res.message) || ''));
+          return;
+        }
+        currentWork = {
+          logId: res.logId,
+          zuban: row.zuban,
+          name:  row.name,
+          qty:   qty,
+          worker: el.worker.value,
+          startedAt: res.startedAt || (new Date().getTime())
+        };
+        saveWork();
+        closeStartPanel();
+        renderWorkBar();
+      }).catch(function () {
+        el.btnStart.disabled = false;
+        alert('通信に失敗しました。電波状況を確認してもう一度お試しください。');
+      });
+    };
+
+    // ---- 作業中バー ----
+    function saveWork() {
+      try {
+        if (currentWork) localStorage.setItem(STORE_WORK, JSON.stringify(currentWork));
+        else localStorage.removeItem(STORE_WORK);
+      } catch (e) {}
+    }
+
+    function restoreWork() {
+      try {
+        var raw = localStorage.getItem(STORE_WORK);
+        if (raw) currentWork = JSON.parse(raw);
+      } catch (e) { currentWork = null; }
+      renderWorkBar();
+    }
+
+    function renderWorkBar() {
+      if (!currentWork) {
+        el.workBar.className = '';
+        if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
+        return;
+      }
+      el.wbZuban.textContent = currentWork.zuban;
+      el.wbSub.textContent = (currentWork.name || '') + '　' + currentWork.qty + '本　' + currentWork.worker;
+      el.workBar.className = 'show';
+
+      tickElapsed();
+      if (!elapsedTimer) elapsedTimer = setInterval(tickElapsed, 1000);
+    }
+
+    function tickElapsed() {
+      if (!currentWork) return;
+      var sec = Math.max(0, Math.floor((new Date().getTime() - currentWork.startedAt) / 1000));
+      var h = Math.floor(sec / 3600);
+      var m = Math.floor((sec % 3600) / 60);
+      var s = sec % 60;
+      el.wbElapsed.textContent = h > 0
+        ? h + ':' + pad2(m) + ':' + pad2(s)
+        : m + ':' + pad2(s);
+    }
+
+    function pad2(n) { return (n < 10 ? '0' : '') + n; }
+
+    // ---- 完了パネル ----
+    el.btnFinish.onclick = function () {
+      if (!currentWork) return;
+      photos = [];
+      judge = '';
+      el.note.value = '';
+      el.photoList.innerHTML = '';
+      el.btnOk.className = 'ghost ok';
+      el.btnNg.className = 'ghost ng';
+      el.saveProgress.className = '';
+
+      var min = Math.max(0, Math.round((new Date().getTime() - currentWork.startedAt) / 60000));
+      el.fpZuban.textContent = currentWork.zuban;
+      el.fpSub.textContent = (currentWork.name || '') + '　' + currentWork.qty + '本　所要 約' + min + '分';
+
+      el.finishPanel.className = 'panel show';
+    };
+
+    el.btnFinishBack.onclick = function () { el.finishPanel.className = 'panel'; };
+
+    el.btnOk.onclick = function () {
+      judge = 'OK';
+      el.btnOk.className = 'ghost ok on';
+      el.btnNg.className = 'ghost ng';
+    };
+    el.btnNg.onclick = function () {
+      judge = 'NG';
+      el.btnOk.className = 'ghost ok';
+      el.btnNg.className = 'ghost ng on';
+    };
+
+    // ---- 写真 ----
+    el.btnAddPhoto.onclick = function () { el.photoFile.click(); };
+
+    el.photoFile.onchange = function (e) {
+      var file = e.target.files && e.target.files[0];
+      e.target.value = '';
+      if (!file) return;
+
+      // 送る前に縮小する。原寸のままだと現場の電波では時間がかかりすぎる。
+      shrinkImage(file, 1600, 0.7).then(function (dataUrl) {
+        photos.push({ dataUrl: dataUrl });
+        renderPhotos();
+      }).catch(function () {
+        alert('写真を読み込めませんでした。');
+      });
+    };
+
+    function shrinkImage(file, maxSize, quality) {
+      return new Promise(function (resolve, reject) {
+        var img = new Image();
+        var url = URL.createObjectURL(file);
+
+        img.onload = function () {
+          URL.revokeObjectURL(url);
+          var scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+          var canvas = document.createElement('canvas');
+          canvas.width  = Math.round(img.width  * scale);
+          canvas.height = Math.round(img.height * scale);
+          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = function () { URL.revokeObjectURL(url); reject(); };
+        img.src = url;
+      });
+    }
+
+    function renderPhotos() {
+      el.photoList.innerHTML = '';
+      photos.forEach(function (p, i) {
+        var box = document.createElement('div');
+        box.className = 'thumb';
+
+        var im = document.createElement('img');
+        im.src = p.dataUrl;
+        box.appendChild(im);
+
+        var del = document.createElement('button');
+        del.className = 'del';
+        del.type = 'button';
+        del.textContent = '×';
+        del.onclick = function () { photos.splice(i, 1); renderPhotos(); };
+        box.appendChild(del);
+
+        el.photoList.appendChild(box);
+      });
+    }
+
+    // ---- 記録して完了 ----
+    el.btnSaveFinish.onclick = function () {
+      if (!currentWork) return;
+
+      if (!judge) {
+        if (!confirm('検査の OK / NG が選ばれていません。このまま記録しますか？')) return;
+      }
+      if (!photos.length) {
+        if (!confirm('写真がありません。このまま記録しますか？')) return;
+      }
+
+      el.btnSaveFinish.disabled = true;
+      el.saveProgress.className = 'show';
+
+      // 写真を 1 枚ずつ送る。まとめて送ると重く、失敗時にやり直しが大きいため。
+      var uploaded = [];
+      var folderUrl = '';
+
+      function next(i) {
+        if (i >= photos.length) { finalize(); return; }
+
+        el.saveProgress.textContent = '写真を保存しています… (' + (i + 1) + '/' + photos.length + ')';
+
+        apiPost({
+          action: 'photo',
+          logId:  currentWork.logId,
+          zuban:  currentWork.zuban,
+          worker: currentWork.worker,
+          index:  i + 1,
+          dataUrl: photos[i].dataUrl
+        }).then(function (res) {
+          if (res && res.ok) {
+            uploaded.push({ url: res.url, name: res.name });
+            folderUrl = res.folderUrl || folderUrl;
+          }
+          next(i + 1);
+        }).catch(function () {
+          next(i + 1);   // 1 枚失敗しても残りは続ける
+        });
+      }
+
+      function finalize() {
+        el.saveProgress.textContent = '記録しています…';
+
+        apiPost({
+          action: 'finish',
+          logId:  currentWork.logId,
+          inspect: judge,
+          note:   el.note.value,
+          photos: uploaded,
+          photoFolderUrl: folderUrl
+        }).then(function (res) {
+          el.btnSaveFinish.disabled = false;
+          el.saveProgress.className = '';
+
+          if (!res || !res.ok) {
+            alert('記録できませんでした。' + ((res && res.message) || ''));
+            return;
+          }
+
+          var msg = currentWork.zuban + ' を記録しました。\n'
+                  + '所要 ' + res.minutes + '分（1本あたり ' + res.perUnit + '分）';
+          if (uploaded.length < photos.length) {
+            msg += '\n※ 写真 ' + (photos.length - uploaded.length) + ' 枚は保存できませんでした。';
+          }
+
+          currentWork = null;
+          saveWork();
+          renderWorkBar();
+          el.finishPanel.className = 'panel';
+          photos = [];
+          showStatus(msg.replace(/\n/g, '　'), 'info');
+        }).catch(function () {
+          el.btnSaveFinish.disabled = false;
+          el.saveProgress.className = '';
+          alert('通信に失敗しました。電波状況を確認してもう一度お試しください。');
+        });
+      }
+
+      next(0);
+    };
+
     // ===== 操作の割り当て =====
     el.btnSearch.onclick = function () { doSearch(el.q.value); };
     el.btnScan.onclick   = startScan;
@@ -887,6 +1505,8 @@
 
     // ===== 起動時 =====
     renderHistory();
+    loadWorkers();    // 作業者プルダウンを埋める
+    restoreWork();    // 前回の作業が終わっていなければ復帰する
 
     // URL に ?z=A5-0921 が付いていれば、その図面をすぐ開く
     var m = location.search.match(/[?&]z=([^&]+)/);
