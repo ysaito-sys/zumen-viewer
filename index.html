@@ -201,8 +201,8 @@
       border-bottom: 1px solid var(--line);
     }
     #info.show { display: block; }
-    .zuban { font-size: 24px; font-weight: 800; letter-spacing: .02em; line-height: 1.2; }
-    .zubanName { font-size: 16px; color: var(--muted); margin-top: 2px; }
+    .zuban { font-size: 30px; font-weight: 800; letter-spacing: .02em; line-height: 1.2; }
+    .zubanName { font-size: 17px; color: var(--muted); margin-top: 2px; }
     .specs {
       display: flex; flex-wrap: wrap;
       gap: 6px 14px; margin-top: 8px;
@@ -242,6 +242,49 @@
       border: 1px solid var(--line);
       cursor: pointer;
       min-height: 0;
+    }
+
+    /* ---- 図面を大きく見るための折りたたみ ---- */
+    /* 溶接中は図面を大きく見たいので、図面が出たら上部を畳む。
+       畳んだ状態では細いバーだけが残り、タップで元に戻る。 */
+    #compactBar {
+      flex: none;
+      display: none;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+      cursor: pointer;
+    }
+    body.compact #compactBar { display: flex; }
+    body.compact .searchbar,
+    body.compact .scanbar,
+    body.compact #history,
+    body.compact #info { display: none; }
+
+    #compactBar .zb {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: .02em;
+    }
+    #compactBar .nm {
+      font-size: 14px;
+      color: var(--muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    #compactBar .ex {
+      flex: none;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent);
+      border: 1px solid var(--accent);
+      border-radius: 999px;
+      padding: 5px 12px;
     }
 
     /* ---- PDF 表示 ---- */
@@ -357,21 +400,35 @@
     }
     #workBar.show { display: flex; }
     #workBar .info { flex: 1 1 auto; min-width: 0; }
-    #workBar .zb { font-size: 15px; font-weight: 800; }
-    #workBar .sub { font-size: 12px; opacity: .9; }
-    #workBar .elapsed {
-      flex: none;
-      font-size: 20px;
+    #workBar .zb {
+      font-size: 22px;
       font-weight: 800;
-      font-variant-numeric: tabular-nums;
+      letter-spacing: .02em;
+      line-height: 1.2;
     }
+    #workBar .sub { font-size: 13px; opacity: .92; margin-top: 2px; }
     #workBar button {
       flex: none;
       background: #fff;
       color: #0f7a3d;
-      min-height: 44px;
-      padding: 10px 14px;
+      min-height: 52px;
+      padding: 12px 20px;
+      font-size: 17px;
     }
+
+    /* 完了の押し忘れに気づいてもらうための注意書き。
+       作業を急かさないよう、時間そのものは画面に出さない。 */
+    #wbRemind {
+      flex: none;
+      display: none;
+      padding: 8px 14px;
+      background: #fff4e5;
+      color: var(--warn);
+      font-size: 13px;
+      font-weight: 700;
+      border-bottom: 1px solid var(--line);
+    }
+    #wbRemind.show { display: block; }
 
     /* ---- パネル（着手確認・完了記録）---- */
     .panel {
@@ -444,6 +501,17 @@
       background: #eee;
     }
     #photoList .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    #photoList .thumb .kind {
+      position: absolute;
+      left: 0; bottom: 0; right: 0;
+      padding: 3px 0;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: #fff;
+      background: rgba(11,92,171,.88);
+    }
+    #photoList .thumb .kind.slip { background: rgba(176,96,0,.88); }
     #photoList .thumb .del {
       position: absolute;
       top: 2px; right: 2px;
@@ -523,15 +591,15 @@
     </div>
   </div>
 
-  <!-- 作業中に出るバー。経過時間が動き、ここから完了に進む -->
+  <!-- 作業中に出るバー。時間は表示しない（記録はされる）。ここから完了に進む -->
   <div id="workBar">
     <div class="info">
       <div class="zb" id="wbZuban"></div>
       <div class="sub" id="wbSub"></div>
     </div>
-    <div class="elapsed" id="wbElapsed">0:00</div>
     <button id="btnFinish">完了</button>
   </div>
+  <div id="wbRemind"></div>
 
   <div class="searchbar">
     <input id="q" type="text" inputmode="latin" autocomplete="off" autocapitalize="characters"
@@ -566,6 +634,13 @@
     <div class="specs" id="infoSpecs"></div>
     <div class="variants" id="infoVariants"></div>
     <div class="scanned" id="infoScanned"></div>
+  </div>
+
+  <!-- 図面を大きく表示している時の細いバー。タップで元の画面に戻る -->
+  <div id="compactBar">
+    <span class="zb" id="cbZuban"></span>
+    <span class="nm" id="cbName"></span>
+    <span class="ex">開く</span>
   </div>
 
   <div id="viewer">
@@ -621,8 +696,11 @@
       <div class="target" id="fpZuban"></div>
       <div class="targetSub" id="fpSub"></div>
 
-      <label class="fieldLabel">製品の写真（何枚でも追加できます）</label>
-      <button type="button" id="btnAddPhoto" class="ghost" style="width:100%">写真を撮る</button>
+      <label class="fieldLabel">写真（製品は1枚以上必要です）</label>
+      <div class="row" style="margin-top:6px">
+        <button type="button" id="btnAddProduct" class="ghost">製品を撮る</button>
+        <button type="button" id="btnAddSlip" class="ghost">伝票を撮る</button>
+      </div>
       <input type="file" id="photoFile" accept="image/*" capture="environment" class="visually-hidden">
       <div id="photoList"></div>
 
@@ -694,8 +772,11 @@
       workBar:     document.getElementById('workBar'),
       wbZuban:     document.getElementById('wbZuban'),
       wbSub:       document.getElementById('wbSub'),
-      wbElapsed:   document.getElementById('wbElapsed'),
+      wbRemind:    document.getElementById('wbRemind'),
       btnFinish:   document.getElementById('btnFinish'),
+      compactBar:  document.getElementById('compactBar'),
+      cbZuban:     document.getElementById('cbZuban'),
+      cbName:      document.getElementById('cbName'),
 
       startPanel:  document.getElementById('startPanel'),
       spZuban:     document.getElementById('spZuban'),
@@ -710,7 +791,8 @@
       finishPanel: document.getElementById('finishPanel'),
       fpZuban:     document.getElementById('fpZuban'),
       fpSub:       document.getElementById('fpSub'),
-      btnAddPhoto: document.getElementById('btnAddPhoto'),
+      btnAddProduct: document.getElementById('btnAddProduct'),
+      btnAddSlip:    document.getElementById('btnAddSlip'),
       photoFile:   document.getElementById('photoFile'),
       photoList:   document.getElementById('photoList'),
       btnOk:       document.getElementById('btnOk'),
@@ -863,6 +945,11 @@
         hideStatus();
         addHistory(rows.length ? rows[0].zuban : res.query);
 
+        // 図面が出たら上部を畳んで、図面を大きく見せる
+        el.cbZuban.textContent = rows.length ? rows[0].zuban : res.key;
+        el.cbName.textContent  = rows.length ? (rows[0].name || '') : '';
+        setCompact(true);
+
         // 図面が出たら、着手するか聞く。
         // すでに別の作業が進行中のときは邪魔をしない（図面の参照とみなす）。
         if (rows.length && !currentWork) openStartPanel(rows[0]);
@@ -896,8 +983,15 @@
       el.suggest.className = 'show';
     }
 
+    // ===== 図面を大きく見るための折りたたみ =====
+    function setCompact(on) {
+      document.body.className = on ? 'compact' : '';
+    }
+    el.compactBar.onclick = function () { setCompact(false); };
+
     // ===== カメラ（ライブ）=====
     function startScan() {
+      setCompact(false);          // カメラを出すときは畳みを解除する
       if (scanning) { stopScan(); return; }
 
       if (typeof Html5Qrcode === 'undefined') {
@@ -1405,6 +1499,7 @@
     function renderWorkBar() {
       if (!currentWork) {
         el.workBar.className = '';
+        el.wbRemind.className = '';
         if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
         return;
       }
@@ -1412,22 +1507,26 @@
       el.wbSub.textContent = (currentWork.name || '') + '　' + currentWork.qty + '本　' + currentWork.worker;
       el.workBar.className = 'show';
 
-      tickElapsed();
-      if (!elapsedTimer) elapsedTimer = setInterval(tickElapsed, 1000);
+      checkForgotten();
+      if (!elapsedTimer) elapsedTimer = setInterval(checkForgotten, 60000);   // 1 分ごとで足りる
     }
 
-    function tickElapsed() {
+    // 経過時間は画面に出さない。作業を急かさないため。
+    // ただし完了の押し忘れは実際に起きるので、長く経ったときだけ声をかける。
+    var REMIND_AFTER_MIN = 240;   // 4 時間
+
+    function checkForgotten() {
       if (!currentWork) return;
-      var sec = Math.max(0, Math.floor((new Date().getTime() - currentWork.startedAt) / 1000));
-      var h = Math.floor(sec / 3600);
-      var m = Math.floor((sec % 3600) / 60);
-      var s = sec % 60;
-      el.wbElapsed.textContent = h > 0
-        ? h + ':' + pad2(m) + ':' + pad2(s)
-        : m + ':' + pad2(s);
-    }
+      var min = (new Date().getTime() - currentWork.startedAt) / 60000;
 
-    function pad2(n) { return (n < 10 ? '0' : '') + n; }
+      if (min >= REMIND_AFTER_MIN) {
+        el.wbRemind.textContent =
+          'この作業を始めてからかなり経っています。完了を押し忘れていませんか？';
+        el.wbRemind.className = 'show';
+      } else {
+        el.wbRemind.className = '';
+      }
+    }
 
     // ---- 完了パネル ----
     el.btnFinish.onclick = function () {
@@ -1440,9 +1539,8 @@
       el.btnNg.className = 'ghost ng';
       el.saveProgress.className = '';
 
-      var min = Math.max(0, Math.round((new Date().getTime() - currentWork.startedAt) / 60000));
       el.fpZuban.textContent = currentWork.zuban;
-      el.fpSub.textContent = (currentWork.name || '') + '　' + currentWork.qty + '本　所要 約' + min + '分';
+      el.fpSub.textContent = (currentWork.name || '') + '　' + currentWork.qty + '本';
 
       el.finishPanel.className = 'panel show';
     };
@@ -1461,16 +1559,24 @@
     };
 
     // ---- 写真 ----
-    el.btnAddPhoto.onclick = function () { el.photoFile.click(); };
+    var pendingKind = 'product';   // いま撮ろうとしているのは製品か伝票か
+
+    el.btnAddProduct.onclick = function () { pendingKind = 'product'; el.photoFile.click(); };
+    el.btnAddSlip.onclick    = function () { pendingKind = 'slip';    el.photoFile.click(); };
 
     el.photoFile.onchange = function (e) {
       var file = e.target.files && e.target.files[0];
       e.target.value = '';
       if (!file) return;
 
+      var kind = pendingKind;
+
       // 送る前に縮小する。原寸のままだと現場の電波では時間がかかりすぎる。
-      shrinkImage(file, 1600, 0.7).then(function (dataUrl) {
-        photos.push({ dataUrl: dataUrl });
+      // 伝票は文字を読めることが大事なので、製品より少し大きめに残す。
+      var maxSize = (kind === 'slip') ? 2000 : 1600;
+
+      shrinkImage(file, maxSize, 0.75).then(function (dataUrl) {
+        photos.push({ dataUrl: dataUrl, kind: kind });
         renderPhotos();
       }).catch(function () {
         alert('写真を読み込めませんでした。');
@@ -1506,6 +1612,11 @@
         im.src = p.dataUrl;
         box.appendChild(im);
 
+        var tag = document.createElement('span');
+        tag.className = 'kind' + (p.kind === 'slip' ? ' slip' : '');
+        tag.textContent = (p.kind === 'slip') ? '伝票' : '製品';
+        box.appendChild(tag);
+
         var del = document.createElement('button');
         del.className = 'del';
         del.type = 'button';
@@ -1517,15 +1628,23 @@
       });
     }
 
+    function countPhotos(kind) {
+      var n = 0;
+      photos.forEach(function (p) { if (p.kind === kind) n++; });
+      return n;
+    }
+
     // ---- 記録して完了 ----
     el.btnSaveFinish.onclick = function () {
       if (!currentWork) return;
 
+      // 製品の写真は証跡として必ず要るので、ここは通さない
+      if (countPhotos('product') === 0) {
+        alert('製品の写真を 1 枚以上撮ってください。');
+        return;
+      }
       if (!judge) {
         if (!confirm('検査の OK / NG が選ばれていません。このまま記録しますか？')) return;
-      }
-      if (!photos.length) {
-        if (!confirm('写真がありません。このまま記録しますか？')) return;
       }
 
       el.btnSaveFinish.disabled = true;
@@ -1546,10 +1665,11 @@
           zuban:  currentWork.zuban,
           worker: currentWork.worker,
           index:  i + 1,
+          kind:   photos[i].kind,
           dataUrl: photos[i].dataUrl
         }).then(function (res) {
           if (res && res.ok) {
-            uploaded.push({ url: res.url, name: res.name });
+            uploaded.push({ url: res.url, name: res.name, kind: res.kind });
             folderUrl = res.folderUrl || folderUrl;
           }
           next(i + 1);
@@ -1577,10 +1697,10 @@
             return;
           }
 
-          var msg = currentWork.zuban + ' を記録しました。\n'
-                  + '所要 ' + res.minutes + '分（1本あたり ' + res.perUnit + '分）';
+          // 所要時間はシートに記録されるが、画面には出さない（急かさないため）
+          var msg = currentWork.zuban + ' の作業を記録しました。お疲れさまでした。';
           if (uploaded.length < photos.length) {
-            msg += '\n※ 写真 ' + (photos.length - uploaded.length) + ' 枚は保存できませんでした。';
+            msg += '　※ 写真 ' + (photos.length - uploaded.length) + ' 枚は保存できませんでした。';
           }
 
           currentWork = null;
