@@ -45,6 +45,97 @@
     header h1 { margin: 0; font-size: 16px; font-weight: 700; letter-spacing: .02em; }
     header .sub { font-size: 12px; opacity: .85; }
 
+    /* ---- 製造 / 検査 の切り替え ---- */
+    /* 検査は別の担当が別工程で行う。端末は共用なので、URL を分けずに
+       同じアプリの中で役割を切り替える形にしている。 */
+    .modebar {
+      flex: none;
+      display: flex;
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+    }
+    .modebar button {
+      flex: 1 1 0;
+      min-height: 52px;
+      border-radius: 0;
+      background: transparent;
+      color: var(--muted);
+      border-bottom: 3px solid transparent;
+      font-size: 16px;
+    }
+    .modebar button.on {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+      background: #f2f7fc;
+    }
+    .modebar .badge {
+      display: inline-block;
+      margin-left: 8px;
+      min-width: 22px;
+      padding: 1px 7px;
+      border-radius: 999px;
+      background: var(--warn);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .modebar .badge:empty { display: none; }
+
+    /* 検査モードでは製造用の操作を隠す */
+    body.inspect .searchbar,
+    body.inspect .scanbar,
+    body.inspect #history,
+    body.inspect #info,
+    body.inspect #compactBar,
+    body.inspect #viewer,
+    body.inspect #pdfCtrl,
+    body.inspect #actions,
+    body.inspect #workBar,
+    body.inspect #wbRemind { display: none !important; }
+    body:not(.inspect) #inspectPane { display: none; }
+
+    /* ---- 検査画面 ---- */
+    #inspectPane {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .pendCard {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .pendCard .zb { font-size: 22px; font-weight: 800; letter-spacing: .02em; }
+    .pendCard .meta { font-size: 14px; color: var(--muted); }
+    .pendCard .photos { display: flex; flex-wrap: wrap; gap: 8px; }
+    .pendCard .photos a {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .pendCard .photos a.slip { color: var(--warn); border-color: var(--warn); }
+    .pendEmpty {
+      padding: 40px 20px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.8;
+    }
+
     /* ---- 検索バー ---- */
     .searchbar {
       flex: none;
@@ -288,9 +379,74 @@
     }
 
     /* ---- PDF 表示 ---- */
+    /* 現場は軍手なのでピンチができない。ドライブのビューアを埋め込むと
+       外から拡大縮小を操作できないため、PDF を自前で描いてボタンで操作する。 */
     #viewer { flex: 1 1 auto; min-height: 0; position: relative; background: #52565c; }
+
+    #pdfView {
+      position: absolute;
+      inset: 0;
+      display: none;
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+      cursor: grab;
+      touch-action: pan-x pan-y;
+    }
+    #pdfView.show { display: block; }
+    #pdfView.dragging { cursor: grabbing; }
+    #pdfCanvas {
+      display: block;
+      margin: 10px auto;
+      background: #fff;
+      box-shadow: 0 2px 14px rgba(0,0,0,.35);
+    }
+
+    /* ドライブのビューアに戻すときの受け皿 */
     #pdf { width: 100%; height: 100%; border: 0; display: none; }
     #pdf.show { display: block; }
+
+    /* ---- 図面の操作バー（タッチペン・軍手前提で大きめ）---- */
+    #pdfCtrl {
+      flex: none;
+      display: none;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 10px;
+      padding-bottom: calc(8px + env(safe-area-inset-bottom));
+      background: var(--panel);
+      border-top: 1px solid var(--line);
+    }
+    #pdfCtrl.show { display: flex; }
+    #pdfCtrl button {
+      min-height: 54px;
+      min-width: 54px;
+      padding: 8px 10px;
+      font-size: 22px;
+      font-weight: 700;
+      flex: none;
+    }
+    #pdfCtrl button.lbl { font-size: 14px; padding: 8px 14px; }
+    #pdfCtrl .gap { flex: 1 1 auto; }
+    #pdfZoomLabel {
+      flex: none;
+      min-width: 58px;
+      text-align: center;
+      font-size: 15px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      color: var(--ink, var(--text));
+    }
+    #pageInfo {
+      flex: none;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+      min-width: 46px;
+      text-align: center;
+    }
+    .pageGroup { display: none; align-items: center; gap: 6px; }
+    .pageGroup.show { display: flex; }
 
     #placeholder {
       position: absolute;
@@ -558,14 +714,58 @@
     }
     #saveProgress.show { display: block; }
 
-    @media (min-width: 800px) {
-      header h1 { font-size: 18px; }
-      .searchbar input { font-size: 20px; }
+    /* ---- タブレット ---- */
+    /* 現場の主役は iPad。指と手袋とタッチペンで扱うので、
+       画面が広い分をそのまま操作部の大きさに充てる。 */
+    @media (min-width: 768px) {
+      .searchbar input { font-size: 21px; padding: 14px 16px; }
+      button, .btnlike { font-size: 17px; min-height: 54px; }
+      .scanbar button, .scanbar .btnlike { min-height: 60px; font-size: 18px; }
+
+      .modebar button { min-height: 58px; font-size: 18px; }
+
+      .zuban { font-size: 34px; }
+      .zubanName { font-size: 19px; }
+      .specs { font-size: 15px; }
+
+      #compactBar .zb { font-size: 26px; }
+      #compactBar .nm { font-size: 16px; }
+      #workBar .zb { font-size: 26px; }
+      #workBar .sub { font-size: 15px; }
+      #workBar button { min-height: 58px; font-size: 19px; padding: 14px 26px; }
+
+      /* 図面の操作ボタンは、タッチペンでも外さない大きさに */
+      #pdfCtrl button { min-height: 62px; min-width: 62px; font-size: 26px; }
+      #pdfCtrl button.lbl { font-size: 16px; padding: 10px 20px; }
+      #pdfZoomLabel { font-size: 17px; min-width: 68px; }
+
+      .stepper button { width: 80px; height: 80px; min-height: 80px; font-size: 36px; }
+      .stepper .value { font-size: 48px; min-width: 110px; }
+
+      .pendCard { padding: 18px 20px; }
+      .pendCard .zb { font-size: 26px; }
+      .pendCard .meta { font-size: 15px; }
+      .judge button { min-height: 64px; font-size: 20px; }
+
       .panel .sheetbox {
         margin: auto;
-        max-width: 560px;
+        max-width: 620px;
         border-radius: 16px;
+        padding: 24px;
       }
+      .panel .target { font-size: 24px; }
+      .panel .targetSub { font-size: 16px; }
+
+      #inspectPane { padding: 18px; gap: 14px; max-width: 820px; width: 100%; margin: 0 auto; }
+    }
+
+    /* 横持ちで高さが足りない時は、図面に回せる高さを稼ぐ */
+    @media (orientation: landscape) and (max-height: 840px) {
+      header { padding: 6px 14px; padding-top: calc(6px + env(safe-area-inset-top)); }
+      header h1 { font-size: 15px; }
+      .modebar button { min-height: 44px; }
+      #pdfCtrl { padding: 6px 10px; }
+      #pdfCtrl button { min-height: 52px; min-width: 52px; }
     }
   </style>
 </head>
@@ -590,6 +790,15 @@
       </div>
     </div>
   </div>
+
+  <!-- 製造と検査は担当も工程も別。同じ端末で役割を切り替える -->
+  <div class="modebar">
+    <button type="button" id="tabWork" class="on">製造</button>
+    <button type="button" id="tabInspect">検査<span class="badge" id="pendBadge"></span></button>
+  </div>
+
+  <!-- 検査モードの画面。検査待ちの一覧から選んで可否を入れる -->
+  <div id="inspectPane"></div>
 
   <!-- 作業中に出るバー。時間は表示しない（記録はされる）。ここから完了に進む -->
   <div id="workBar">
@@ -644,6 +853,7 @@
   </div>
 
   <div id="viewer">
+    <div id="pdfView"><canvas id="pdfCanvas"></canvas></div>
     <iframe id="pdf" title="図面PDF" allow="fullscreen"></iframe>
     <div id="placeholder">
       <div class="big">図面</div>
@@ -655,6 +865,20 @@
         図面が表示されない時は、この端末が<br>
         会社の Google アカウントにログインしているか確認してください。
       </p>
+    </div>
+  </div>
+
+  <!-- 図面の操作。軍手でも押せるよう大きく作ってある -->
+  <div id="pdfCtrl">
+    <button type="button" id="zoomOut" class="ghost" aria-label="縮小">−</button>
+    <span id="pdfZoomLabel">100%</span>
+    <button type="button" id="zoomIn" class="ghost" aria-label="拡大">＋</button>
+    <button type="button" id="fitWidth" class="ghost lbl">幅に合わせる</button>
+    <div class="gap"></div>
+    <div class="pageGroup" id="pageGroup">
+      <button type="button" id="pagePrev" class="ghost" aria-label="前のページ">◀</button>
+      <span id="pageInfo">1/1</span>
+      <button type="button" id="pageNext" class="ghost" aria-label="次のページ">▶</button>
     </div>
   </div>
 
@@ -704,14 +928,8 @@
       <input type="file" id="photoFile" accept="image/*" capture="environment" class="visually-hidden">
       <div id="photoList"></div>
 
-      <label class="fieldLabel">検査</label>
-      <div class="judge">
-        <button type="button" id="btnOk" class="ghost ok">OK</button>
-        <button type="button" id="btnNg" class="ghost ng">NG</button>
-      </div>
-
-      <label class="fieldLabel" for="note">メモ（任意。NG のときは理由を残してください）</label>
-      <textarea id="note" placeholder="例: 溶接部にピンホール。手直し済み"></textarea>
+      <label class="fieldLabel" for="note">申し送り（任意）</label>
+      <textarea id="note" placeholder="例: 材料に反りあり。矯正して溶接"></textarea>
 
       <div id="saveProgress"></div>
 
@@ -727,6 +945,7 @@
   </div>
 
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>
   (function () {
     'use strict';
@@ -757,11 +976,28 @@
       variants: document.getElementById('infoVariants'),
       scanned:  document.getElementById('infoScanned'),
       pdf:      document.getElementById('pdf'),
+      pdfView:  document.getElementById('pdfView'),
+      pdfCanvas:document.getElementById('pdfCanvas'),
+      pdfCtrl:  document.getElementById('pdfCtrl'),
+      zoomOut:  document.getElementById('zoomOut'),
+      zoomIn:   document.getElementById('zoomIn'),
+      pdfZoomLabel: document.getElementById('pdfZoomLabel'),
+      fitWidth: document.getElementById('fitWidth'),
+      pageGroup:document.getElementById('pageGroup'),
+      pagePrev: document.getElementById('pagePrev'),
+      pageNext: document.getElementById('pageNext'),
+      pageInfo: document.getElementById('pageInfo'),
       placeholder: document.getElementById('placeholder'),
       actions:  document.getElementById('actions'),
       btnDrive: document.getElementById('btnOpenDrive'),
       btnRescan:document.getElementById('btnRescan'),
       history:  document.getElementById('history'),
+
+      // 製造 / 検査の切り替え
+      tabWork:     document.getElementById('tabWork'),
+      tabInspect:  document.getElementById('tabInspect'),
+      pendBadge:   document.getElementById('pendBadge'),
+      inspectPane: document.getElementById('inspectPane'),
 
       // 作業ログ関連
       workerBtn:   document.getElementById('workerBtn'),
@@ -795,8 +1031,6 @@
       btnAddSlip:    document.getElementById('btnAddSlip'),
       photoFile:   document.getElementById('photoFile'),
       photoList:   document.getElementById('photoList'),
-      btnOk:       document.getElementById('btnOk'),
-      btnNg:       document.getElementById('btnNg'),
       note:        document.getElementById('note'),
       saveProgress:document.getElementById('saveProgress'),
       btnSaveFinish: document.getElementById('btnSaveFinish'),
@@ -815,7 +1049,6 @@
     var pendingRow  = null;   // 着手確認中の図番情報（検索結果の 1 行目）
     var pendingQty  = 1;      // ステッパーの値
     var photos      = [];     // 撮った写真 [{ dataUrl }]
-    var judge       = '';     // 'OK' / 'NG'
     var elapsedTimer = null;
     var currentWorker = '';   // いま選ばれている作業者
     var workerList  = [];     // シートから取った氏名の一覧
@@ -937,12 +1170,8 @@
       el.info.className = 'show';
 
       if (res.pdf) {
-        currentPdf = res.pdf;
-        el.pdf.src = res.pdf.previewUrl;
-        el.pdf.className = 'show';
-        el.placeholder.className = 'hide';
+        showDrawing(res.pdf);
         el.actions.className = 'show';
-        hideStatus();
         addHistory(rows.length ? rows[0].zuban : res.query);
 
         // 図面が出たら上部を畳んで、図面を大きく見せる
@@ -955,9 +1184,7 @@
         if (rows.length && !currentWork) openStartPanel(rows[0]);
       } else {
         currentPdf = null;
-        el.pdf.src = '';
-        el.pdf.className = '';
-        el.placeholder.className = '';
+        clearDrawing();
         el.actions.className = '';
         showStatus(res.message || 'PDF が見つかりませんでした。', 'warn');
       }
@@ -983,9 +1210,179 @@
       el.suggest.className = 'show';
     }
 
+    // ===================================================================
+    // 図面の表示
+    //
+    // ドライブのビューアを埋め込むと、外側から拡大縮小を操作できない。
+    // 現場は軍手でピンチができずタッチペンを使うため、PDF を取り寄せて
+    // 自前で描き、＋−ボタンで拡大縮小できるようにしている。
+    // 読み込みに失敗したときだけ、従来どおりドライブのビューアに戻す。
+    // ===================================================================
+    var pdfDoc = null;
+    var pdfPageNo = 1;
+    var pdfScale = 1;
+    var pdfRendering = false;
+
+    if (window.pdfjsLib) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+
+    function showDrawing(pdfInfo) {
+      currentPdf = pdfInfo;
+
+      if (!window.pdfjsLib) { useDriveViewer(pdfInfo); return; }
+
+      showStatus('図面を読み込んでいます…', 'info');
+
+      fetch(API_URL + '?api=pdf&id=' + encodeURIComponent(pdfInfo.id))
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+          if (!res || !res.ok) throw new Error((res && res.message) || '取得できませんでした');
+
+          var raw = atob(res.data);
+          var bytes = new Uint8Array(raw.length);
+          for (var i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+
+          return pdfjsLib.getDocument({ data: bytes }).promise;
+        })
+        .then(function (doc) {
+          pdfDoc = doc;
+          pdfPageNo = 1;
+
+          el.pdf.className = '';
+          el.pdf.src = '';
+          el.pdfView.className = 'show';
+          el.placeholder.className = 'hide';
+          el.pdfCtrl.className = 'show';
+          el.pageGroup.className = doc.numPages > 1 ? 'pageGroup show' : 'pageGroup';
+
+          hideStatus();
+          renderPdfPage(true);       // 初回は幅に合わせる
+        })
+        .catch(function () {
+          useDriveViewer(pdfInfo);   // 自前描画が駄目なら従来の方法に戻す
+        });
+    }
+
+    // 自前描画が使えない環境向け。ドライブのビューアをそのまま埋め込む。
+    function useDriveViewer(pdfInfo) {
+      pdfDoc = null;
+      el.pdfView.className = '';
+      el.pdfCtrl.className = '';
+      el.pageGroup.className = 'pageGroup';
+      el.pdf.src = pdfInfo.previewUrl;
+      el.pdf.className = 'show';
+      el.placeholder.className = 'hide';
+      hideStatus();
+    }
+
+    function clearDrawing() {
+      pdfDoc = null;
+      el.pdfView.className = '';
+      el.pdfCtrl.className = '';
+      el.pageGroup.className = 'pageGroup';
+      el.pdf.src = '';
+      el.pdf.className = '';
+      el.placeholder.className = '';
+    }
+
+    function renderPdfPage(fitWidth) {
+      if (!pdfDoc || pdfRendering) return;
+      pdfRendering = true;
+
+      pdfDoc.getPage(pdfPageNo).then(function (page) {
+        var base = page.getViewport({ scale: 1 });
+
+        if (fitWidth) {
+          var avail = el.pdfView.clientWidth - 20;
+          if (avail > 0) pdfScale = avail / base.width;
+        }
+
+        // 端末の画素密度に合わせて描くと、拡大しても文字が潰れない
+        var dpr = window.devicePixelRatio || 1;
+        var vp = page.getViewport({ scale: pdfScale * dpr });
+        var canvas = el.pdfCanvas;
+
+        canvas.width  = Math.floor(vp.width);
+        canvas.height = Math.floor(vp.height);
+        canvas.style.width  = Math.floor(vp.width / dpr) + 'px';
+        canvas.style.height = Math.floor(vp.height / dpr) + 'px';
+
+        return page.render({
+          canvasContext: canvas.getContext('2d'),
+          viewport: vp
+        }).promise;
+      }).then(function () {
+        pdfRendering = false;
+        updatePdfLabels();
+      }).catch(function () {
+        pdfRendering = false;
+      });
+    }
+
+    function updatePdfLabels() {
+      el.pdfZoomLabel.textContent = Math.round(pdfScale * 100) + '%';
+      if (pdfDoc) el.pageInfo.textContent = pdfPageNo + '/' + pdfDoc.numPages;
+    }
+
+    function zoomBy(factor) {
+      if (!pdfDoc) return;
+      pdfScale = Math.min(8, Math.max(0.2, pdfScale * factor));
+      renderPdfPage(false);
+    }
+
+    el.zoomIn.onclick  = function () { zoomBy(1.25); };
+    el.zoomOut.onclick = function () { zoomBy(0.8); };
+    el.fitWidth.onclick = function () { renderPdfPage(true); };
+
+    el.pagePrev.onclick = function () {
+      if (!pdfDoc || pdfPageNo <= 1) return;
+      pdfPageNo--;
+      renderPdfPage(false);
+    };
+    el.pageNext.onclick = function () {
+      if (!pdfDoc || pdfPageNo >= pdfDoc.numPages) return;
+      pdfPageNo++;
+      renderPdfPage(false);
+    };
+
+    // タッチペンでも図面を動かせるよう、ドラッグでスクロールできるようにする
+    (function () {
+      var dragging = false, sx = 0, sy = 0, sl = 0, st = 0;
+
+      el.pdfView.addEventListener('pointerdown', function (e) {
+        dragging = true;
+        sx = e.clientX; sy = e.clientY;
+        sl = el.pdfView.scrollLeft; st = el.pdfView.scrollTop;
+        el.pdfView.className = 'show dragging';
+      });
+
+      el.pdfView.addEventListener('pointermove', function (e) {
+        if (!dragging) return;
+        el.pdfView.scrollLeft = sl - (e.clientX - sx);
+        el.pdfView.scrollTop  = st - (e.clientY - sy);
+      });
+
+      function endDrag() {
+        if (!dragging) return;
+        dragging = false;
+        el.pdfView.className = 'show';
+      }
+      el.pdfView.addEventListener('pointerup', endDrag);
+      el.pdfView.addEventListener('pointercancel', endDrag);
+      el.pdfView.addEventListener('pointerleave', endDrag);
+    })();
+
+    // 画面の向きが変わったら幅に合わせ直す
+    window.addEventListener('resize', function () {
+      if (pdfDoc && !pdfRendering) renderPdfPage(true);
+    });
+
     // ===== 図面を大きく見るための折りたたみ =====
+    // 検査モードのクラスと共存させるため、className を上書きせず切り替える
     function setCompact(on) {
-      document.body.className = on ? 'compact' : '';
+      document.body.classList.toggle('compact', on);
     }
     el.compactBar.onclick = function () { setCompact(false); };
 
@@ -1532,11 +1929,8 @@
     el.btnFinish.onclick = function () {
       if (!currentWork) return;
       photos = [];
-      judge = '';
       el.note.value = '';
       el.photoList.innerHTML = '';
-      el.btnOk.className = 'ghost ok';
-      el.btnNg.className = 'ghost ng';
       el.saveProgress.className = '';
 
       el.fpZuban.textContent = currentWork.zuban;
@@ -1546,17 +1940,6 @@
     };
 
     el.btnFinishBack.onclick = function () { el.finishPanel.className = 'panel'; };
-
-    el.btnOk.onclick = function () {
-      judge = 'OK';
-      el.btnOk.className = 'ghost ok on';
-      el.btnNg.className = 'ghost ng';
-    };
-    el.btnNg.onclick = function () {
-      judge = 'NG';
-      el.btnOk.className = 'ghost ok';
-      el.btnNg.className = 'ghost ng on';
-    };
 
     // ---- 写真 ----
     var pendingKind = 'product';   // いま撮ろうとしているのは製品か伝票か
@@ -1643,10 +2026,6 @@
         alert('製品の写真を 1 枚以上撮ってください。');
         return;
       }
-      if (!judge) {
-        if (!confirm('検査の OK / NG が選ばれていません。このまま記録しますか？')) return;
-      }
-
       el.btnSaveFinish.disabled = true;
       el.saveProgress.className = 'show';
 
@@ -1684,7 +2063,6 @@
         apiPost({
           action: 'finish',
           logId:  currentWork.logId,
-          inspect: judge,
           note:   el.note.value,
           photos: uploaded,
           photoFolderUrl: folderUrl
@@ -1719,6 +2097,161 @@
       next(0);
     };
 
+    // ===================================================================
+    // 検査（別工程・別担当）
+    //
+    // 生産が完了した行は「検査待ち」として残り、検査担当が後から
+    // 写真を見ながら可否を入れる。検査者と検査日時も別に記録される。
+    // ===================================================================
+    function setMode(mode) {
+      var inspect = (mode === 'inspect');
+      document.body.classList.toggle('inspect', inspect);
+      el.tabWork.className    = inspect ? '' : 'on';
+      el.tabInspect.className = inspect ? 'on' : '';
+
+      if (inspect) {
+        if (scanning) stopScan();
+        loadPending();
+      }
+    }
+
+    el.tabWork.onclick    = function () { setMode('work'); };
+    el.tabInspect.onclick = function () { setMode('inspect'); };
+
+    function loadPending() {
+      el.inspectPane.innerHTML = '<div class="pendEmpty">読み込んでいます…</div>';
+
+      fetch(API_URL + '?api=pending')
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+          var items = (res && res.ok && res.items) ? res.items : [];
+          renderPending(items);
+          updatePendBadge(items.length);
+        })
+        .catch(function () {
+          el.inspectPane.innerHTML =
+            '<div class="pendEmpty">読み込めませんでした。<br>通信環境を確認してください。</div>';
+        });
+    }
+
+    function updatePendBadge(n) {
+      el.pendBadge.textContent = n > 0 ? String(n) : '';
+    }
+
+    function renderPending(items) {
+      el.inspectPane.innerHTML = '';
+
+      if (!items.length) {
+        el.inspectPane.innerHTML =
+          '<div class="pendEmpty">検査待ちはありません。<br>生産が完了するとここに並びます。</div>';
+        return;
+      }
+
+      items.forEach(function (it) {
+        var card = document.createElement('div');
+        card.className = 'pendCard';
+
+        var zb = document.createElement('div');
+        zb.className = 'zb';
+        zb.textContent = it.zuban;
+        card.appendChild(zb);
+
+        var meta = document.createElement('div');
+        meta.className = 'meta';
+        meta.textContent = (it.name || '') + '　' + it.qty + '本　'
+                         + it.date + ' ' + it.endTime + '　製造: ' + it.worker;
+        card.appendChild(meta);
+
+        // 写真へのリンク。判断材料なので種類が分かるようにしておく
+        var links = String(it.photoLinks || '').split('\n').filter(function (s) { return s.trim(); });
+        if (links.length) {
+          var box = document.createElement('div');
+          box.className = 'photos';
+          links.forEach(function (line, i) {
+            var slip = line.indexOf('[伝票]') === 0;
+            var url = line.replace(/^\[[^\]]*\]\s*/, '');
+            var a = document.createElement('a');
+            a.href = url;
+            a.target = '_blank';
+            a.rel = 'noopener';
+            a.className = slip ? 'slip' : '';
+            a.textContent = (slip ? '伝票' : '製品') + ' ' + (i + 1);
+            box.appendChild(a);
+          });
+          card.appendChild(box);
+        }
+
+        var row = document.createElement('div');
+        row.className = 'judge';
+
+        var ok = document.createElement('button');
+        ok.type = 'button';
+        ok.className = 'ghost ok';
+        ok.textContent = 'OK';
+        ok.onclick = function () { submitInspection(it, 'OK', card); };
+
+        var ng = document.createElement('button');
+        ng.type = 'button';
+        ng.className = 'ghost ng';
+        ng.textContent = 'NG';
+        ng.onclick = function () { submitInspection(it, 'NG', card); };
+
+        row.appendChild(ok);
+        row.appendChild(ng);
+        card.appendChild(row);
+
+        el.inspectPane.appendChild(card);
+      });
+    }
+
+    function submitInspection(item, judgeResult, card) {
+      if (!currentWorker) {
+        openWorkerPanel('');    // 検査者が未選択なら、その場で選ばせる
+        return;
+      }
+
+      var note = '';
+      if (judgeResult === 'NG') {
+        note = prompt('NG の内容を入力してください（あとから追記もできます）', '');
+        if (note === null) return;    // 取り消し
+      }
+
+      var buttons = card.querySelectorAll('button');
+      for (var i = 0; i < buttons.length; i++) buttons[i].disabled = true;
+
+      apiPost({
+        action: 'inspect',
+        logId: item.logId,
+        inspector: currentWorker,
+        inspect: judgeResult,
+        note: note
+      }).then(function (res) {
+        if (!res || !res.ok) {
+          alert('記録できませんでした。' + ((res && res.message) || ''));
+          for (var i = 0; i < buttons.length; i++) buttons[i].disabled = false;
+          return;
+        }
+        card.parentNode.removeChild(card);
+
+        var left = el.inspectPane.querySelectorAll('.pendCard').length;
+        updatePendBadge(left);
+        if (!left) renderPending([]);
+      }).catch(function () {
+        alert('通信に失敗しました。もう一度お試しください。');
+        for (var i = 0; i < buttons.length; i++) buttons[i].disabled = false;
+      });
+    }
+
+    // 検査待ちの件数だけ先に取って、タブに出しておく
+    function refreshPendBadge() {
+      fetch(API_URL + '?api=pending')
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+          updatePendBadge((res && res.ok && res.items) ? res.items.length : 0);
+        })
+        .catch(function () {});
+    }
+
     // ===== 操作の割り当て =====
     el.btnSearch.onclick = function () { doSearch(el.q.value); };
     el.btnScan.onclick   = startScan;
@@ -1742,8 +2275,9 @@
 
     // ===== 起動時 =====
     renderHistory();
-    restoreWork();    // 先に復帰させる（作業中ならその作業者を引き継ぐため）
-    loadWorkers();    // 未着手なら、ここで作業者を選ばせる画面が出る
+    restoreWork();       // 先に復帰させる（作業中ならその作業者を引き継ぐため）
+    loadWorkers();       // 未着手なら、ここで作業者を選ばせる画面が出る
+    refreshPendBadge();  // 検査待ちの件数をタブに出す
 
     // URL に ?z=A5-0921 が付いていれば、その図面をすぐ開く
     var m = location.search.match(/[?&]z=([^&]+)/);
