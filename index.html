@@ -2,10 +2,16 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#0b5cab">
   <title>溶接図面ビューア</title>
   <style>
+    /* ===================================================================
+       画面の骨格
+       上（情報）・中（プレビュー）・下（操作）の三段構成。
+       上と下は固定し、中だけが伸び縮みする。
+       操作ボタンがスクロールで画面外に逃げないことを最優先にしている。
+       =================================================================== */
     :root {
       --bg: #f4f6f8;
       --panel: #ffffff;
@@ -13,6 +19,7 @@
       --text: #16202a;
       --muted: #5d6b7a;
       --accent: #0b5cab;
+      --ok: #12703f;
       --warn: #b06000;
       --err: #b3261e;
     }
@@ -23,161 +30,31 @@
       margin: 0;
       padding: 0;
       height: 100%;
+      overflow: hidden;              /* 画面全体はスクロールさせない */
       background: var(--bg);
       color: var(--text);
       font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", system-ui, sans-serif;
       -webkit-text-size-adjust: 100%;
+      overscroll-behavior: none;
     }
-    body { display: flex; flex-direction: column; }
-
-    /* ---- ヘッダー ---- */
-    header {
-      flex: none;
-      background: var(--accent);
-      color: #fff;
-      padding: 10px 14px;
-      padding-top: calc(10px + env(safe-area-inset-top));
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-    }
-    header h1 { margin: 0; font-size: 16px; font-weight: 700; letter-spacing: .02em; }
-    header .sub { font-size: 12px; opacity: .85; }
-
-    /* ---- 製造 / 検査 の切り替え ---- */
-    /* 検査は別の担当が別工程で行う。端末は共用なので、URL を分けずに
-       同じアプリの中で役割を切り替える形にしている。 */
-    .modebar {
-      flex: none;
-      display: flex;
-      background: var(--panel);
-      border-bottom: 1px solid var(--line);
-    }
-    .modebar button {
-      flex: 1 1 0;
-      min-height: 52px;
-      border-radius: 0;
-      background: transparent;
-      color: var(--muted);
-      border-bottom: 3px solid transparent;
-      font-size: 16px;
-    }
-    .modebar button.on {
-      color: var(--accent);
-      border-bottom-color: var(--accent);
-      background: #f2f7fc;
-    }
-    .modebar .badge {
-      display: inline-block;
-      margin-left: 8px;
-      min-width: 22px;
-      padding: 1px 7px;
-      border-radius: 999px;
-      background: var(--warn);
-      color: #fff;
-      font-size: 12px;
-      font-weight: 700;
-    }
-    .modebar .badge:empty { display: none; }
-
-    /* 検査モードでは製造用の操作を隠す */
-    body.inspect .searchbar,
-    body.inspect .scanbar,
-    body.inspect #history,
-    body.inspect #info,
-    body.inspect #compactBar,
-    body.inspect #viewer,
-    body.inspect #pdfCtrl,
-    body.inspect #actions,
-    body.inspect #workBar,
-    body.inspect #wbRemind { display: none !important; }
-    body:not(.inspect) #inspectPane { display: none; }
-
-    /* ---- 検査画面 ---- */
-    #inspectPane {
-      flex: 1 1 auto;
-      min-height: 0;
-      overflow-y: auto;
-      -webkit-overflow-scrolling: touch;
-      padding: 14px;
+    body {
+      height: 100dvh;                /* アドレスバーの出入りに追従する */
       display: flex;
       flex-direction: column;
-      gap: 12px;
     }
-    .pendCard {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      padding: 14px 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-    .pendCard .zb { font-size: 22px; font-weight: 800; letter-spacing: .02em; }
-    .pendCard .meta { font-size: 14px; color: var(--muted); }
-    .pendCard .photos { display: flex; flex-wrap: wrap; gap: 8px; }
-    .pendCard .photos a {
-      display: block;
-      font-size: 13px;
-      font-weight: 700;
-      padding: 8px 12px;
-      border-radius: 8px;
-      border: 1px solid var(--line);
-      color: var(--accent);
-      text-decoration: none;
-    }
-    .pendCard .photos a.slip { color: var(--warn); border-color: var(--warn); }
-    .pendEmpty {
-      padding: 40px 20px;
-      text-align: center;
-      color: var(--muted);
-      font-size: 15px;
-      line-height: 1.8;
-    }
-
-    /* ---- 検索バー ---- */
-    .searchbar {
-      flex: none;
-      display: flex;
-      gap: 8px;
-      padding: 10px 10px 8px;
-      background: var(--panel);
-    }
-    .searchbar input {
-      flex: 1 1 auto;
-      min-width: 0;
-      font-size: 18px;
-      padding: 12px 14px;
-      border: 2px solid var(--line);
-      border-radius: 8px;
-      background: #fff;
-      color: var(--text);
-    }
-    .searchbar input:focus { outline: none; border-color: var(--accent); }
-
-    .scanbar {
-      flex: none;
-      display: flex;
-      gap: 8px;
-      padding: 0 10px 10px;
-      background: var(--panel);
-      border-bottom: 1px solid var(--line);
-    }
-    .scanbar button, .scanbar .btnlike { flex: 1 1 0; }
 
     button, .btnlike {
       font-family: inherit;
       font-size: 16px;
       font-weight: 700;
-      padding: 12px 16px;
+      padding: 10px 14px;
       border: none;
       border-radius: 8px;
       background: var(--accent);
       color: #fff;
       cursor: pointer;
       white-space: nowrap;
-      min-height: 48px;          /* 手袋でも押せる大きさ */
+      min-height: 50px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -190,9 +67,8 @@
       color: var(--accent);
       border: 2px solid var(--accent);
     }
-    button:disabled { opacity: .5; cursor: default; }
+    button:disabled { opacity: .45; cursor: default; }
 
-    /* ラベルをボタンに見せてファイル選択を開くため、input 自体は隠す */
     .visually-hidden {
       position: absolute;
       width: 1px; height: 1px;
@@ -203,390 +79,314 @@
       border: 0;
     }
 
-    /* ---- カメラ ---- */
-    #scanWrap { flex: none; display: none; background: #000; position: relative; }
-    #scanWrap.open { display: block; }
-    #reader { width: 100%; }
-    #reader video { width: 100% !important; display: block; }
-    .scanHint {
-      position: absolute;
-      left: 0; right: 0; bottom: 0;
-      padding: 8px 12px;
-      background: rgba(0,0,0,.6);
+    /* ---- 上段：ヘッダー ---- */
+    header {
+      flex: none;
+      background: var(--accent);
       color: #fff;
-      font-size: 13px;
-      text-align: center;
-    }
-
-    /* ---- カメラ操作（ズーム・ライト）---- */
-    /* 指示書の QR は小さいので、寄れないと読めない。ズームが要になる。 */
-    #camCtrl {
-      position: absolute;
-      left: 0; right: 0; bottom: 31px;
-      display: none;
-      align-items: center;
-      gap: 10px;
       padding: 8px 12px;
-      background: rgba(0,0,0,.55);
-    }
-    #camCtrl.show { display: flex; }
-    #camCtrl input[type=range] {
-      flex: 1 1 auto;
-      min-width: 0;
-      height: 32px;
-      accent-color: #fff;
-    }
-    #camCtrl button {
-      flex: none;
-      min-height: 36px;
-      padding: 6px 12px;
-      font-size: 13px;
-      background: rgba(255,255,255,.92);
-      color: var(--text);
-      border-radius: 6px;
-    }
-    #zoomLabel {
-      flex: none;
-      color: #fff;
-      font-size: 13px;
-      font-weight: 700;
-      min-width: 44px;
-      text-align: right;
-      font-variant-numeric: tabular-nums;
-    }
-
-    /* ---- 状態メッセージ ---- */
-    #status {
-      flex: none;
-      display: none;
-      padding: 10px 14px;
-      font-size: 15px;
-      font-weight: 700;
-      border-bottom: 1px solid var(--line);
-    }
-    #status.show { display: block; }
-    #status.err  { background: #fdecea; color: var(--err); }
-    #status.warn { background: #fff4e5; color: var(--warn); }
-    #status.info { background: #e8f1fb; color: var(--accent); }
-
-    /* ---- 「もしかして」候補 ---- */
-    #suggest {
-      flex: none;
-      display: none;
-      flex-wrap: wrap;
-      gap: 6px;
-      padding: 8px 10px;
-      background: #fff8e8;
-      border-bottom: 1px solid var(--line);
-    }
-    #suggest.show { display: flex; }
-    #suggest .label { width: 100%; font-size: 13px; font-weight: 700; color: var(--warn); }
-    #suggest .chip { background: #fff; border-color: var(--warn); }
-
-    /* ---- 図番情報 ---- */
-    #info {
-      flex: none;
-      display: none;
-      padding: 10px 14px;
-      background: var(--panel);
-      border-bottom: 1px solid var(--line);
-    }
-    #info.show { display: block; }
-    .zuban { font-size: 30px; font-weight: 800; letter-spacing: .02em; line-height: 1.2; }
-    .zubanName { font-size: 17px; color: var(--muted); margin-top: 2px; }
-    .specs {
-      display: flex; flex-wrap: wrap;
-      gap: 6px 14px; margin-top: 8px;
-      font-size: 13px; color: var(--muted);
-    }
-    .specs b { color: var(--text); font-weight: 700; }
-    .variants { margin-top: 8px; font-size: 13px; color: var(--muted); }
-    .scanned {
-      margin-top: 6px;
-      font-size: 11px;
-      color: #8b97a3;
-      font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
-    }
-
-    /* ---- 履歴 ---- */
-    #history {
-      flex: none;
-      display: none;
-      gap: 6px;
-      padding: 8px 10px;
-      overflow-x: auto;
-      background: var(--panel);
-      border-bottom: 1px solid var(--line);
-      white-space: nowrap;
-      -webkit-overflow-scrolling: touch;
-    }
-    #history.show { display: flex; }
-
-    .chip {
-      flex: none;
-      font-size: 13px;
-      font-weight: 700;
-      padding: 8px 12px;
-      border-radius: 999px;
-      background: #eaeef3;
-      color: var(--text);
-      border: 1px solid var(--line);
-      cursor: pointer;
-      min-height: 0;
-    }
-
-    /* ---- 図面を大きく見るための折りたたみ ---- */
-    /* 溶接中は図面を大きく見たいので、図面が出たら上部を畳む。
-       畳んだ状態では細いバーだけが残り、タップで元に戻る。 */
-    #compactBar {
-      flex: none;
-      display: none;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 14px;
-      background: var(--panel);
-      border-bottom: 1px solid var(--line);
-      cursor: pointer;
-    }
-    body.compact #compactBar { display: flex; }
-    body.compact .searchbar,
-    body.compact .scanbar,
-    body.compact #history,
-    body.compact #info { display: none; }
-
-    #compactBar .zb {
-      font-size: 22px;
-      font-weight: 800;
-      letter-spacing: .02em;
-    }
-    #compactBar .nm {
-      font-size: 14px;
-      color: var(--muted);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      flex: 1 1 auto;
-      min-width: 0;
-    }
-    #compactBar .ex {
-      flex: none;
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--accent);
-      border: 1px solid var(--accent);
-      border-radius: 999px;
-      padding: 5px 12px;
-    }
-
-    /* ---- PDF 表示 ---- */
-    /* 現場は軍手なのでピンチができない。ドライブのビューアを埋め込むと
-       外から拡大縮小を操作できないため、PDF を自前で描いてボタンで操作する。 */
-    #viewer { flex: 1 1 auto; min-height: 0; position: relative; background: #52565c; }
-
-    #pdfView {
-      position: absolute;
-      inset: 0;
-      display: none;
-      overflow: auto;
-      -webkit-overflow-scrolling: touch;
-      cursor: grab;
-      touch-action: pan-x pan-y;
-    }
-    #pdfView.show { display: block; }
-    #pdfView.dragging { cursor: grabbing; }
-    #pdfCanvas {
-      display: block;
-      margin: 10px auto;
-      background: #fff;
-      box-shadow: 0 2px 14px rgba(0,0,0,.35);
-    }
-
-    /* ドライブのビューアに戻すときの受け皿 */
-    #pdf { width: 100%; height: 100%; border: 0; display: none; }
-    #pdf.show { display: block; }
-
-    /* ---- 図面の操作バー（タッチペン・軍手前提で大きめ）---- */
-    #pdfCtrl {
-      flex: none;
-      display: none;
-      align-items: center;
-      gap: 6px;
-      padding: 8px 10px;
-      padding-bottom: calc(8px + env(safe-area-inset-bottom));
-      background: var(--panel);
-      border-top: 1px solid var(--line);
-    }
-    #pdfCtrl.show { display: flex; }
-    #pdfCtrl button {
-      min-height: 54px;
-      min-width: 54px;
-      padding: 8px 10px;
-      font-size: 22px;
-      font-weight: 700;
-      flex: none;
-    }
-    #pdfCtrl button.lbl { font-size: 14px; padding: 8px 14px; }
-    #pdfCtrl .gap { flex: 1 1 auto; }
-    #pdfZoomLabel {
-      flex: none;
-      min-width: 58px;
-      text-align: center;
-      font-size: 15px;
-      font-weight: 700;
-      font-variant-numeric: tabular-nums;
-      color: var(--ink, var(--text));
-    }
-    #pageInfo {
-      flex: none;
-      font-size: 14px;
-      font-weight: 700;
-      color: var(--muted);
-      font-variant-numeric: tabular-nums;
-      min-width: 46px;
-      text-align: center;
-    }
-    .pageGroup { display: none; align-items: center; gap: 6px; }
-    .pageGroup.show { display: flex; }
-
-    #placeholder {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 12px;
-      color: #cfd4da;
-      text-align: center;
-      padding: 20px;
-    }
-    #placeholder.hide { display: none; }
-    #placeholder .big { font-size: 46px; }
-    #placeholder p { margin: 0; font-size: 15px; line-height: 1.7; }
-    #placeholder .note { font-size: 12px; opacity: .75; margin-top: 4px; }
-
-    /* ---- フッター ---- */
-    footer {
-      flex: none;
-      display: none;
-      gap: 8px;
-      padding: 8px 10px;
-      padding-bottom: calc(8px + env(safe-area-inset-bottom));
-      background: var(--panel);
-      border-top: 1px solid var(--line);
-    }
-    footer.show { display: flex; }
-    footer button { flex: 1 1 0; font-size: 14px; padding: 10px; min-height: 44px; }
-
-    /* ---- 作業者の選択（ヘッダー内）---- */
-    #workerWrap {
-      flex: none;
+      padding-top: calc(8px + env(safe-area-inset-top));
       display: flex;
       align-items: center;
-      gap: 6px;
+      justify-content: space-between;
+      gap: 10px;
     }
+    header h1 { margin: 0; font-size: 15px; font-weight: 700; letter-spacing: .02em; }
     #workerBtn {
       font-size: 14px;
-      font-weight: 700;
-      padding: 8px 12px;
-      min-height: 40px;
+      padding: 7px 12px;
+      min-height: 38px;
       border-radius: 8px;
       border: 2px solid rgba(255,255,255,.6);
       background: rgba(255,255,255,.15);
       color: #fff;
-      max-width: 46vw;
+      max-width: 48vw;
       overflow: hidden;
       text-overflow: ellipsis;
-      white-space: nowrap;
       display: block;
     }
-    #workerBtn.unset {
-      border-color: #ffd24d;
-      background: rgba(255,210,77,.25);
-    }
+    #workerBtn.unset { border-color: #ffd24d; background: rgba(255,210,77,.25); }
 
-    /* ---- 作業者を選ぶ一覧（起動時に必ず出す）---- */
-    #workerList {
+    /* ---- 上段：製造 / 検査 ---- */
+    .modebar {
+      flex: none;
       display: flex;
-      flex-direction: column;
-      gap: 10px;
-      margin-top: 14px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
     }
-    #workerList button {
-      width: 100%;
-      min-height: 62px;
-      font-size: 20px;
-      justify-content: flex-start;
-      padding-left: 20px;
+    .modebar button {
+      flex: 1 1 0;
+      min-height: 46px;
+      border-radius: 0;
+      background: transparent;
+      color: var(--muted);
+      border-bottom: 3px solid transparent;
+      font-size: 15px;
     }
-    #workerList button.recent {
-      border-width: 3px;
-      background: #eef5fd;
+    .modebar button.on {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+      background: #f2f7fc;
     }
-    #workerList .badge {
-      margin-left: auto;
+    .modebar .badge {
+      display: inline-block;
+      margin-left: 7px;
+      min-width: 21px;
+      padding: 1px 7px;
+      border-radius: 999px;
+      background: var(--warn);
+      color: #fff;
       font-size: 12px;
       font-weight: 700;
-      color: var(--accent);
-      background: #fff;
-      border: 1px solid var(--accent);
-      border-radius: 999px;
-      padding: 3px 10px;
     }
-    #workerEmpty {
-      margin-top: 14px;
-      padding: 14px;
-      background: #fff8e8;
-      border: 1px solid var(--warn);
-      border-radius: 8px;
-      font-size: 14px;
-      line-height: 1.7;
-      color: var(--text);
-    }
+    .modebar .badge:empty { display: none; }
 
-    /* ---- 作業中バー ---- */
+    /* ---- 上段：作業中の帯 ---- */
     #workBar {
       flex: none;
       display: none;
       align-items: center;
       gap: 10px;
-      padding: 10px 12px;
-      background: #0f7a3d;
+      padding: 8px 12px;
+      background: var(--ok);
       color: #fff;
     }
     #workBar.show { display: flex; }
     #workBar .info { flex: 1 1 auto; min-width: 0; }
-    #workBar .zb {
-      font-size: 22px;
-      font-weight: 800;
-      letter-spacing: .02em;
-      line-height: 1.2;
-    }
-    #workBar .sub { font-size: 13px; opacity: .92; margin-top: 2px; }
+    #workBar .zb { font-size: 20px; font-weight: 800; line-height: 1.2; }
+    #workBar .sub { font-size: 12px; opacity: .92; }
     #workBar button {
       flex: none;
       background: #fff;
-      color: #0f7a3d;
-      min-height: 52px;
-      padding: 12px 20px;
-      font-size: 17px;
+      color: var(--ok);
+      min-height: 46px;
+      padding: 10px 18px;
+      font-size: 16px;
     }
-
-    /* 完了の押し忘れに気づいてもらうための注意書き。
-       作業を急かさないよう、時間そのものは画面に出さない。 */
     #wbRemind {
       flex: none;
       display: none;
-      padding: 8px 14px;
+      padding: 7px 12px;
       background: #fff4e5;
       color: var(--warn);
       font-size: 13px;
       font-weight: 700;
-      border-bottom: 1px solid var(--line);
     }
     #wbRemind.show { display: block; }
 
-    /* ---- パネル（着手確認・完了記録）---- */
+    /* ---- 上段：検索欄 ---- */
+    #searchRow {
+      flex: none;
+      display: flex;
+      gap: 8px;
+      padding: 8px 10px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+    }
+    #searchRow.hide { display: none; }
+    #searchRow input {
+      flex: 1 1 auto;
+      min-width: 0;
+      font-size: 17px;
+      padding: 11px 13px;
+      border: 2px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--text);
+    }
+    #searchRow input:focus { outline: none; border-color: var(--accent); }
+
+    /* ---- 上段：図番の帯（1行。タップで詳細を開く）---- */
+    #infoBar {
+      flex: none;
+      display: none;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+      cursor: pointer;
+    }
+    #infoBar.show { display: flex; }
+    #infoBar .zb { font-size: 21px; font-weight: 800; letter-spacing: .02em; flex: none; }
+    #infoBar .nm {
+      font-size: 14px;
+      color: var(--muted);
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #infoBar .more {
+      flex: none;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent);
+      border: 1px solid var(--accent);
+      border-radius: 999px;
+      padding: 4px 11px;
+    }
+
+    /* ===================================================================
+       中段：プレビュー枠
+       カメラ・図面・検査一覧を同じ枠に重ねて、切り替えて使う。
+       この枠のサイズは上下のバーに関係なく常に確保される。
+       =================================================================== */
+    #stage {
+      flex: 1 1 auto;
+      min-height: 0;
+      position: relative;
+      background: #4a4e54;
+      overflow: hidden;
+    }
+    .layer { position: absolute; inset: 0; display: none; }
+    .layer.show { display: block; }
+
+    /* カメラ */
+    #camLayer { background: #000; }
+    #reader { width: 100%; height: 100%; }
+    #reader video { width: 100% !important; height: 100% !important; object-fit: cover; display: block; }
+    .scanHint {
+      position: absolute;
+      left: 0; right: 0; bottom: 0;
+      padding: 7px 12px;
+      background: rgba(0,0,0,.55);
+      color: #fff;
+      font-size: 13px;
+      text-align: center;
+    }
+
+    /* 図面 */
+    #pdfLayer { overflow: auto; -webkit-overflow-scrolling: touch; cursor: grab; touch-action: pan-x pan-y; }
+    #pdfLayer.dragging { cursor: grabbing; }
+    #pdfCanvas { display: block; margin: 8px auto; background: #fff; box-shadow: 0 2px 14px rgba(0,0,0,.35); }
+    #pdfFrame { width: 100%; height: 100%; border: 0; }
+
+    /* 検査の一覧 */
+    #listLayer { overflow-y: auto; -webkit-overflow-scrolling: touch; background: var(--bg); padding: 12px; }
+    .pendCard {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 13px 15px;
+      margin-bottom: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      cursor: pointer;
+    }
+    .pendCard .zb { font-size: 21px; font-weight: 800; letter-spacing: .02em; }
+    .pendCard .meta { font-size: 13px; color: var(--muted); }
+    .pendCard .go { align-self: flex-start; font-size: 13px; font-weight: 700; color: var(--accent); }
+    .pendEmpty { padding: 44px 20px; text-align: center; color: #cfd4da; font-size: 15px; line-height: 1.9; }
+
+    /* 何も出ていない時の案内 */
+    #emptyLayer {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      color: #cfd4da;
+      text-align: center;
+      padding: 20px;
+    }
+    #emptyLayer .big { font-size: 42px; }
+    #emptyLayer p { margin: 0; font-size: 15px; line-height: 1.8; }
+
+    /* 枠の中に重ねるメッセージ。枠の外に押し出さないための作り */
+    #msg {
+      position: absolute;
+      left: 8px; right: 8px; top: 8px;
+      display: none;
+      padding: 10px 13px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 700;
+      box-shadow: 0 2px 10px rgba(0,0,0,.2);
+      z-index: 5;
+    }
+    #msg.show { display: block; }
+    #msg.info { background: #e8f1fb; color: var(--accent); }
+    #msg.warn { background: #fff4e5; color: var(--warn); }
+    #msg.err  { background: #fdecea; color: var(--err); }
+
+    #suggest {
+      position: absolute;
+      left: 8px; right: 8px; top: 8px;
+      display: none;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 10px;
+      border-radius: 8px;
+      background: #fff8e8;
+      box-shadow: 0 2px 10px rgba(0,0,0,.2);
+      z-index: 6;
+    }
+    #suggest.show { display: flex; }
+    #suggest .label { width: 100%; font-size: 13px; font-weight: 700; color: var(--warn); }
+    .chip {
+      font-size: 13px;
+      font-weight: 700;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: #fff;
+      color: var(--text);
+      border: 1px solid var(--warn);
+      cursor: pointer;
+      min-height: 0;
+    }
+
+    /* ===================================================================
+       下段：操作バー
+       状況ごとに中身を入れ替える。常に画面の一番下に居座る。
+       =================================================================== */
+    #bottom {
+      flex: none;
+      background: var(--panel);
+      border-top: 1px solid var(--line);
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .bar { display: none; align-items: center; gap: 7px; padding: 8px 10px; }
+    .bar.show { display: flex; }
+    .bar > .grow { flex: 1 1 0; }
+    .bar button, .bar .btnlike { flex: none; }
+
+    /* 読み取りの入口 */
+    #barScan button, #barScan .btnlike { flex: 1 1 0; min-height: 56px; font-size: 17px; }
+
+    /* カメラ中 */
+    #barCam input[type=range] { flex: 1 1 auto; min-width: 0; height: 40px; accent-color: var(--accent); }
+    #barCam #zoomLabel {
+      flex: none; min-width: 46px; text-align: right;
+      font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums;
+    }
+
+    /* 図面表示中 */
+    #barPdf button { min-width: 56px; min-height: 56px; font-size: 22px; }
+    #barPdf button.lbl { font-size: 14px; min-width: 0; padding: 8px 12px; }
+    #pdfZoomLabel {
+      flex: none; min-width: 56px; text-align: center;
+      font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums;
+    }
+    #pageInfo {
+      flex: none; min-width: 44px; text-align: center;
+      font-size: 14px; font-weight: 700; color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+    .pageGroup { display: none; align-items: center; gap: 6px; }
+    .pageGroup.show { display: flex; }
+
+    /* 検査の判定 */
+    #barJudge button { flex: 1 1 0; min-height: 60px; font-size: 19px; }
+    #barJudge .ok { background: var(--ok); }
+    #barJudge .ng { background: var(--err); }
+    #barJudge .back { flex: none; min-width: 74px; }
+
+    /* ===================================================================
+       画面の上に重ねるパネル（作業者・着手・完了）
+       =================================================================== */
     .panel {
       position: fixed;
       inset: 0;
@@ -601,184 +401,210 @@
       background: var(--panel);
       border-radius: 16px 16px 0 0;
       padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
-      max-height: 92vh;
+      max-height: 92dvh;
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
     }
     .panel h2 { margin: 0 0 4px; font-size: 17px; }
-    .panel .target { font-size: 20px; font-weight: 800; }
-    .panel .targetSub { font-size: 14px; color: var(--muted); margin-bottom: 14px; }
+    .panel .target { font-size: 21px; font-weight: 800; }
+    .panel .targetSub { font-size: 14px; color: var(--muted); margin-bottom: 12px; }
     .panel .row { display: flex; gap: 10px; margin-top: 14px; }
     .panel .row button { flex: 1 1 0; }
     .panel .hint { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.6; }
-
-    /* ---- 本数のステッパー（現場で押しやすいよう大きく）---- */
-    .stepper {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      justify-content: center;
-      margin: 8px 0 4px;
+    .panel label.fieldLabel {
+      display: block; font-size: 13px; font-weight: 700;
+      color: var(--muted); margin-top: 14px;
     }
+    .panel textarea {
+      width: 100%; margin-top: 8px;
+      font-family: inherit; font-size: 15px; padding: 10px;
+      border: 2px solid var(--line); border-radius: 8px;
+      resize: vertical; min-height: 64px;
+    }
+
+    /* 本数のステッパー */
+    .stepper { display: flex; align-items: center; gap: 14px; justify-content: center; margin: 8px 0 4px; }
     .stepper button {
-      width: 68px;
-      height: 68px;
-      min-height: 68px;
-      border-radius: 50%;
-      font-size: 32px;
-      font-weight: 700;
-      padding: 0;
-      line-height: 1;
+      width: 68px; height: 68px; min-height: 68px;
+      border-radius: 50%; font-size: 32px; padding: 0; line-height: 1;
     }
     .stepper .value {
-      font-size: 40px;
-      font-weight: 800;
-      min-width: 90px;
-      text-align: center;
-      font-variant-numeric: tabular-nums;
+      font-size: 40px; font-weight: 800; min-width: 88px;
+      text-align: center; font-variant-numeric: tabular-nums;
     }
-    .stepper .unit { font-size: 16px; color: var(--muted); }
     .stepLabel { text-align: center; font-size: 13px; color: var(--muted); }
 
-    /* ---- 写真 ---- */
-    #photoList {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 10px;
+    /* 作業者の一覧 */
+    #workerList { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+    #workerList button { width: 100%; min-height: 60px; font-size: 19px; justify-content: flex-start; padding-left: 18px; }
+    #workerList button.recent { border-width: 3px; background: #eef5fd; }
+    #workerList .badge {
+      margin-left: auto; font-size: 12px; font-weight: 700;
+      color: var(--accent); background: #fff;
+      border: 1px solid var(--accent); border-radius: 999px; padding: 3px 10px;
     }
+    #workerEmpty {
+      margin-top: 12px; padding: 14px;
+      background: #fff8e8; border: 1px solid var(--warn);
+      border-radius: 8px; font-size: 14px; line-height: 1.7;
+    }
+
+    /* 写真 */
+    #photoList { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
     #photoList .thumb {
-      position: relative;
-      width: 84px;
-      height: 84px;
-      border-radius: 8px;
-      overflow: hidden;
-      border: 1px solid var(--line);
-      background: #eee;
+      position: relative; width: 82px; height: 82px;
+      border-radius: 8px; overflow: hidden;
+      border: 1px solid var(--line); background: #eee;
     }
     #photoList .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
     #photoList .thumb .kind {
-      position: absolute;
-      left: 0; bottom: 0; right: 0;
-      padding: 3px 0;
-      text-align: center;
-      font-size: 11px;
-      font-weight: 700;
-      color: #fff;
+      position: absolute; left: 0; right: 0; bottom: 0;
+      padding: 2px 0; text-align: center;
+      font-size: 11px; font-weight: 700; color: #fff;
       background: rgba(11,92,171,.88);
     }
     #photoList .thumb .kind.slip { background: rgba(176,96,0,.88); }
     #photoList .thumb .del {
-      position: absolute;
-      top: 2px; right: 2px;
-      width: 26px; height: 26px; min-height: 26px;
-      padding: 0;
-      border-radius: 50%;
-      background: rgba(0,0,0,.6);
-      color: #fff;
-      font-size: 15px;
-      line-height: 1;
+      position: absolute; top: 2px; right: 2px;
+      width: 26px; height: 26px; min-height: 26px; padding: 0;
+      border-radius: 50%; background: rgba(0,0,0,.6);
+      color: #fff; font-size: 15px; line-height: 1;
     }
-
-    /* ---- 検査の OK / NG ---- */
-    .judge { display: flex; gap: 10px; margin-top: 8px; }
-    .judge button { flex: 1 1 0; min-height: 56px; font-size: 18px; }
-    .judge button.ok.on  { background: #1a7f45; color: #fff; border-color: #1a7f45; }
-    .judge button.ng.on  { background: var(--err); color: #fff; border-color: var(--err); }
-
-    .panel textarea {
-      width: 100%;
-      margin-top: 10px;
-      font-family: inherit;
-      font-size: 15px;
-      padding: 10px;
-      border: 2px solid var(--line);
-      border-radius: 8px;
-      resize: vertical;
-      min-height: 68px;
-    }
-    .panel label.fieldLabel {
-      display: block;
-      font-size: 13px;
-      font-weight: 700;
-      color: var(--muted);
-      margin-top: 14px;
-    }
-
-    #saveProgress {
-      display: none;
-      margin-top: 10px;
-      font-size: 14px;
-      font-weight: 700;
-      color: var(--accent);
-    }
+    #saveProgress { display: none; margin-top: 10px; font-size: 14px; font-weight: 700; color: var(--accent); }
     #saveProgress.show { display: block; }
 
+    /* 検査で参照する写真のリンク */
+    .photoLinks { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px; }
+    .photoLinks a {
+      font-size: 13px; font-weight: 700;
+      padding: 8px 12px; border-radius: 8px;
+      border: 1px solid var(--line); color: var(--accent); text-decoration: none;
+    }
+    .photoLinks a.slip { color: var(--warn); border-color: var(--warn); }
+
     /* ---- タブレット ---- */
-    /* 現場の主役は iPad。指と手袋とタッチペンで扱うので、
-       画面が広い分をそのまま操作部の大きさに充てる。 */
     @media (min-width: 768px) {
-      .searchbar input { font-size: 21px; padding: 14px 16px; }
-      button, .btnlike { font-size: 17px; min-height: 54px; }
-      .scanbar button, .scanbar .btnlike { min-height: 60px; font-size: 18px; }
-
-      .modebar button { min-height: 58px; font-size: 18px; }
-
-      .zuban { font-size: 34px; }
-      .zubanName { font-size: 19px; }
-      .specs { font-size: 15px; }
-
-      #compactBar .zb { font-size: 26px; }
-      #compactBar .nm { font-size: 16px; }
-      #workBar .zb { font-size: 26px; }
-      #workBar .sub { font-size: 15px; }
-      #workBar button { min-height: 58px; font-size: 19px; padding: 14px 26px; }
-
-      /* 図面の操作ボタンは、タッチペンでも外さない大きさに */
-      #pdfCtrl button { min-height: 62px; min-width: 62px; font-size: 26px; }
-      #pdfCtrl button.lbl { font-size: 16px; padding: 10px 20px; }
-      #pdfZoomLabel { font-size: 17px; min-width: 68px; }
-
-      .stepper button { width: 80px; height: 80px; min-height: 80px; font-size: 36px; }
-      .stepper .value { font-size: 48px; min-width: 110px; }
-
-      .pendCard { padding: 18px 20px; }
-      .pendCard .zb { font-size: 26px; }
-      .pendCard .meta { font-size: 15px; }
-      .judge button { min-height: 64px; font-size: 20px; }
-
-      .panel .sheetbox {
-        margin: auto;
-        max-width: 620px;
-        border-radius: 16px;
-        padding: 24px;
-      }
-      .panel .target { font-size: 24px; }
-      .panel .targetSub { font-size: 16px; }
-
-      #inspectPane { padding: 18px; gap: 14px; max-width: 820px; width: 100%; margin: 0 auto; }
+      header h1 { font-size: 17px; }
+      #workerBtn { font-size: 15px; min-height: 42px; }
+      .modebar button { min-height: 54px; font-size: 17px; }
+      #searchRow input { font-size: 20px; padding: 13px 15px; }
+      #infoBar .zb { font-size: 26px; }
+      #infoBar .nm { font-size: 16px; }
+      #workBar .zb { font-size: 25px; }
+      #workBar button { min-height: 54px; font-size: 18px; padding: 12px 24px; }
+      #barScan button, #barScan .btnlike { min-height: 62px; font-size: 19px; }
+      #barPdf button { min-width: 64px; min-height: 64px; font-size: 26px; }
+      #barPdf button.lbl { font-size: 16px; padding: 10px 18px; }
+      #pdfZoomLabel { font-size: 17px; min-width: 66px; }
+      #barJudge button { min-height: 68px; font-size: 21px; }
+      .stepper button { width: 78px; height: 78px; min-height: 78px; font-size: 36px; }
+      .stepper .value { font-size: 46px; min-width: 106px; }
+      .pendCard .zb { font-size: 25px; }
+      .panel .sheetbox { margin: auto; max-width: 620px; border-radius: 16px; padding: 22px; }
+      #listLayer { padding: 16px; }
     }
 
-    /* 横持ちで高さが足りない時は、図面に回せる高さを稼ぐ */
-    @media (orientation: landscape) and (max-height: 840px) {
-      header { padding: 6px 14px; padding-top: calc(6px + env(safe-area-inset-top)); }
-      header h1 { font-size: 15px; }
-      .modebar button { min-height: 44px; }
-      #pdfCtrl { padding: 6px 10px; }
-      #pdfCtrl button { min-height: 52px; min-width: 52px; }
+    /* 横持ちで高さが足りない時は、上段を薄くして図面に高さを回す */
+    @media (orientation: landscape) and (max-height: 560px) {
+      header { padding: 5px 12px; padding-top: calc(5px + env(safe-area-inset-top)); }
+      header h1 { font-size: 14px; }
+      .modebar button { min-height: 40px; }
+      .bar { padding: 5px 10px; }
+      #barPdf button { min-height: 46px; min-width: 46px; }
     }
   </style>
 </head>
 <body>
 
+  <!-- ============ 上段 ============ -->
   <header>
     <h1>溶接図面ビューア</h1>
-    <div id="workerWrap">
-      <button type="button" id="workerBtn" class="unset">作業者を選ぶ</button>
-    </div>
+    <button type="button" id="workerBtn" class="unset">作業者を選ぶ</button>
   </header>
 
-  <!-- ===== 作業者の選択（起動時に必ず出す）===== -->
+  <div class="modebar">
+    <button type="button" id="tabWork" class="on">製造</button>
+    <button type="button" id="tabInspect">検査<span class="badge" id="pendBadge"></span></button>
+  </div>
+
+  <div id="workBar">
+    <div class="info">
+      <div class="zb" id="wbZuban"></div>
+      <div class="sub" id="wbSub"></div>
+    </div>
+    <button type="button" id="btnFinish">完了</button>
+  </div>
+  <div id="wbRemind"></div>
+
+  <div id="searchRow">
+    <input id="q" type="text" inputmode="latin" autocomplete="off" autocapitalize="characters"
+           placeholder="図番を入力（例: A5-0921）">
+    <button type="button" id="btnSearch">検索</button>
+  </div>
+
+  <div id="infoBar">
+    <span class="zb" id="ibZuban"></span>
+    <span class="nm" id="ibName"></span>
+    <span class="more">詳細</span>
+  </div>
+
+  <!-- ============ 中段：プレビュー枠（固定） ============ -->
+  <div id="stage">
+    <div class="layer" id="camLayer">
+      <div id="reader"></div>
+      <div class="scanHint">QR を枠いっぱいに写してください</div>
+    </div>
+
+    <div class="layer" id="pdfLayer"><canvas id="pdfCanvas"></canvas></div>
+    <div class="layer" id="frameLayer"><iframe id="pdfFrame" title="図面PDF"></iframe></div>
+    <div class="layer" id="listLayer"></div>
+
+    <div class="layer show" id="emptyLayer">
+      <div class="big">図面</div>
+      <p>下の「カメラで読取」で QR を読むか、<br>上の欄に図番を入力してください。</p>
+    </div>
+
+    <div id="msg"></div>
+    <div id="suggest"></div>
+  </div>
+
+  <!-- ============ 下段：操作バー（固定） ============ -->
+  <div id="bottom">
+    <div class="bar show" id="barScan">
+      <button type="button" id="btnScan" class="ghost">カメラで読取</button>
+      <label class="btnlike ghost" for="camFile">写真で読取</label>
+      <input type="file" id="camFile" accept="image/*" capture="environment" class="visually-hidden">
+    </div>
+
+    <div class="bar" id="barCam">
+      <button type="button" id="btnStopScan">停止</button>
+      <button type="button" id="btnTorch" class="ghost">ライト</button>
+      <input type="range" id="zoom" min="1" max="5" step="0.1" value="1" aria-label="ズーム">
+      <span id="zoomLabel">1.0x</span>
+    </div>
+
+    <div class="bar" id="barPdf">
+      <button type="button" id="zoomOut" class="ghost" aria-label="縮小">−</button>
+      <span id="pdfZoomLabel">100%</span>
+      <button type="button" id="zoomIn" class="ghost" aria-label="拡大">＋</button>
+      <button type="button" id="fitWidth" class="ghost lbl">幅</button>
+      <div class="grow"></div>
+      <div class="pageGroup" id="pageGroup">
+        <button type="button" id="pagePrev" class="ghost" aria-label="前のページ">◀</button>
+        <span id="pageInfo">1/1</span>
+        <button type="button" id="pageNext" class="ghost" aria-label="次のページ">▶</button>
+      </div>
+      <button type="button" id="btnBackScan" class="ghost lbl">読取</button>
+    </div>
+
+    <div class="bar" id="barJudge">
+      <button type="button" id="btnInsBack" class="ghost back">戻る</button>
+      <button type="button" id="btnInsOk" class="ok">OK</button>
+      <button type="button" id="btnInsNg" class="ng">NG</button>
+    </div>
+  </div>
+
+  <!-- ============ 重ねて出すパネル ============ -->
   <div class="panel" id="workerPanel">
     <div class="sheetbox">
       <h2>作業者を選んでください</h2>
@@ -791,103 +617,6 @@
     </div>
   </div>
 
-  <!-- 製造と検査は担当も工程も別。同じ端末で役割を切り替える -->
-  <div class="modebar">
-    <button type="button" id="tabWork" class="on">製造</button>
-    <button type="button" id="tabInspect">検査<span class="badge" id="pendBadge"></span></button>
-  </div>
-
-  <!-- 検査モードの画面。検査待ちの一覧から選んで可否を入れる -->
-  <div id="inspectPane"></div>
-
-  <!-- 作業中に出るバー。時間は表示しない（記録はされる）。ここから完了に進む -->
-  <div id="workBar">
-    <div class="info">
-      <div class="zb" id="wbZuban"></div>
-      <div class="sub" id="wbSub"></div>
-    </div>
-    <button id="btnFinish">完了</button>
-  </div>
-  <div id="wbRemind"></div>
-
-  <div class="searchbar">
-    <input id="q" type="text" inputmode="latin" autocomplete="off" autocapitalize="characters"
-           placeholder="図番を入力（例: A5-0921）">
-    <button id="btnSearch">検索</button>
-  </div>
-
-  <div class="scanbar">
-    <button id="btnScan" class="ghost">カメラで読取</button>
-    <label class="btnlike ghost" for="camFile">写真で読取</label>
-    <input type="file" id="camFile" accept="image/*" capture="environment" class="visually-hidden">
-  </div>
-
-  <div id="history"></div>
-
-  <div id="scanWrap">
-    <div id="reader"></div>
-    <div id="camCtrl">
-      <button id="btnTorch" type="button">ライト</button>
-      <input type="range" id="zoom" min="1" max="5" step="0.1" value="1" aria-label="ズーム">
-      <span id="zoomLabel">1.0x</span>
-    </div>
-    <div class="scanHint">QR を枠いっぱいに写すと読み取れます</div>
-  </div>
-
-  <div id="status"></div>
-  <div id="suggest"></div>
-
-  <div id="info">
-    <div class="zuban" id="infoZuban"></div>
-    <div class="zubanName" id="infoName"></div>
-    <div class="specs" id="infoSpecs"></div>
-    <div class="variants" id="infoVariants"></div>
-    <div class="scanned" id="infoScanned"></div>
-  </div>
-
-  <!-- 図面を大きく表示している時の細いバー。タップで元の画面に戻る -->
-  <div id="compactBar">
-    <span class="zb" id="cbZuban"></span>
-    <span class="nm" id="cbName"></span>
-    <span class="ex">開く</span>
-  </div>
-
-  <div id="viewer">
-    <div id="pdfView"><canvas id="pdfCanvas"></canvas></div>
-    <iframe id="pdf" title="図面PDF" allow="fullscreen"></iframe>
-    <div id="placeholder">
-      <div class="big">図面</div>
-      <p>
-        「カメラで読取」で QR をスキャンするか、<br>
-        上の欄に図番を入力してください。
-      </p>
-      <p class="note">
-        図面が表示されない時は、この端末が<br>
-        会社の Google アカウントにログインしているか確認してください。
-      </p>
-    </div>
-  </div>
-
-  <!-- 図面の操作。軍手でも押せるよう大きく作ってある -->
-  <div id="pdfCtrl">
-    <button type="button" id="zoomOut" class="ghost" aria-label="縮小">−</button>
-    <span id="pdfZoomLabel">100%</span>
-    <button type="button" id="zoomIn" class="ghost" aria-label="拡大">＋</button>
-    <button type="button" id="fitWidth" class="ghost lbl">幅に合わせる</button>
-    <div class="gap"></div>
-    <div class="pageGroup" id="pageGroup">
-      <button type="button" id="pagePrev" class="ghost" aria-label="前のページ">◀</button>
-      <span id="pageInfo">1/1</span>
-      <button type="button" id="pageNext" class="ghost" aria-label="次のページ">▶</button>
-    </div>
-  </div>
-
-  <footer id="actions">
-    <button id="btnOpenDrive" class="ghost">Drive で開く</button>
-    <button id="btnRescan">続けて読取</button>
-  </footer>
-
-  <!-- ===== 着手の確認（スキャン直後に出る）===== -->
   <div class="panel" id="startPanel">
     <div class="sheetbox">
       <h2>この柱を始めますか？</h2>
@@ -913,7 +642,6 @@
     </div>
   </div>
 
-  <!-- ===== 完了の記録（写真・検査）===== -->
   <div class="panel" id="finishPanel">
     <div class="sheetbox">
       <h2>完了の記録</h2>
@@ -937,133 +665,81 @@
         <button type="button" id="btnSaveFinish">記録して完了</button>
         <button type="button" id="btnFinishBack" class="ghost">戻る</button>
       </div>
-      <div class="hint">
-        写真は図番ごとのフォルダに保存され、シートから見返せます。<br>
-        送信前に自動で縮小するので、通信量はわずかです。
+      <div class="hint">検査は別の担当が、このあと「検査」タブから行います。</div>
+    </div>
+  </div>
+
+  <div class="panel" id="detailPanel">
+    <div class="sheetbox">
+      <h2 id="dpTitle">図番の詳細</h2>
+      <div class="target" id="dpZuban"></div>
+      <div class="targetSub" id="dpName"></div>
+      <div id="dpBody" style="font-size:14px; line-height:2; color:var(--muted)"></div>
+      <div class="photoLinks" id="dpPhotos"></div>
+      <div class="row">
+        <button type="button" id="btnDetailClose" class="ghost">閉じる</button>
       </div>
     </div>
   </div>
 
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-  <!-- PDF.js は同じサイトに置く。
-       別サイトの worker は new Worker() で読み込めず、描画が始まらないため。 -->
+  <!-- PDF.js は同じサイトに置く。別サイトの worker は new Worker() で読めないため -->
   <script src="lib/pdf.min.js"></script>
   <script>
   (function () {
     'use strict';
 
-    // ===================================================================
-    // 図番の検索窓口（GAS の Web アプリ）
-    // このページは GitHub Pages に置かれ、iframe の外で動くため
-    // iPhone / iPad でもカメラが使えます。データだけを GAS に問い合わせます。
-    // ===================================================================
     var API_URL = 'https://script.google.com/macros/s/AKfycbyWwUYgqajwvYeOTNkA-SAm5vVO5fx8cYSaduGjZxUJ9fFtdd7dOEu4X7r39jC8nmcfLw/exec';
 
-    var el = {
-      q:        document.getElementById('q'),
-      btnSearch:document.getElementById('btnSearch'),
-      btnScan:  document.getElementById('btnScan'),
-      camFile:  document.getElementById('camFile'),
-      scanWrap: document.getElementById('scanWrap'),
-      camCtrl:  document.getElementById('camCtrl'),
-      btnTorch: document.getElementById('btnTorch'),
-      zoom:     document.getElementById('zoom'),
-      zoomLabel:document.getElementById('zoomLabel'),
-      status:   document.getElementById('status'),
-      suggest:  document.getElementById('suggest'),
-      info:     document.getElementById('info'),
-      zuban:    document.getElementById('infoZuban'),
-      name:     document.getElementById('infoName'),
-      specs:    document.getElementById('infoSpecs'),
-      variants: document.getElementById('infoVariants'),
-      scanned:  document.getElementById('infoScanned'),
-      pdf:      document.getElementById('pdf'),
-      pdfView:  document.getElementById('pdfView'),
-      pdfCanvas:document.getElementById('pdfCanvas'),
-      pdfCtrl:  document.getElementById('pdfCtrl'),
-      zoomOut:  document.getElementById('zoomOut'),
-      zoomIn:   document.getElementById('zoomIn'),
-      pdfZoomLabel: document.getElementById('pdfZoomLabel'),
-      fitWidth: document.getElementById('fitWidth'),
-      pageGroup:document.getElementById('pageGroup'),
-      pagePrev: document.getElementById('pagePrev'),
-      pageNext: document.getElementById('pageNext'),
-      pageInfo: document.getElementById('pageInfo'),
-      placeholder: document.getElementById('placeholder'),
-      actions:  document.getElementById('actions'),
-      btnDrive: document.getElementById('btnOpenDrive'),
-      btnRescan:document.getElementById('btnRescan'),
-      history:  document.getElementById('history'),
+    var el = {};
+    ['workerBtn','tabWork','tabInspect','pendBadge','workBar','wbZuban','wbSub','btnFinish','wbRemind',
+     'searchRow','q','btnSearch','infoBar','ibZuban','ibName',
+     'stage','camLayer','pdfLayer','pdfCanvas','frameLayer','pdfFrame','listLayer','emptyLayer','msg','suggest',
+     'barScan','btnScan','camFile','barCam','btnStopScan','btnTorch','zoom','zoomLabel',
+     'barPdf','zoomOut','pdfZoomLabel','zoomIn','fitWidth','pageGroup','pagePrev','pageInfo','pageNext','btnBackScan',
+     'barJudge','btnInsBack','btnInsOk','btnInsNg',
+     'workerPanel','workerList','workerEmpty','btnWorkerLater',
+     'startPanel','spZuban','spName','spQtyHint','qtyMinus','qtyValue','qtyPlus','btnStart','btnViewOnly',
+     'finishPanel','fpZuban','fpSub','btnAddProduct','btnAddSlip','photoFile','photoList','note',
+     'saveProgress','btnSaveFinish','btnFinishBack',
+     'detailPanel','dpTitle','dpZuban','dpName','dpBody','dpPhotos','btnDetailClose'
+    ].forEach(function (id) { el[id] = document.getElementById(id); });
 
-      // 製造 / 検査の切り替え
-      tabWork:     document.getElementById('tabWork'),
-      tabInspect:  document.getElementById('tabInspect'),
-      pendBadge:   document.getElementById('pendBadge'),
-      inspectPane: document.getElementById('inspectPane'),
+    // ---- 状態 ----
+    var scanner = null, scanning = false, cameraBlocked = false;
+    var lastCode = '', lastCodeAt = 0;
+    var currentPdf = null, currentRow = null;
+    var currentWork = null, pendingRow = null, pendingQty = 1;
+    var photos = [], pendingKind = 'product';
+    var currentWorker = '', workerList = [];
+    var remindTimer = null;
+    var mode = 'work';                 // 'work' | 'inspect'
+    var inspectItem = null;            // 検査で開いている行
 
-      // 作業ログ関連
-      workerBtn:   document.getElementById('workerBtn'),
-      workerPanel: document.getElementById('workerPanel'),
-      workerList:  document.getElementById('workerList'),
-      workerEmpty: document.getElementById('workerEmpty'),
-      btnWorkerLater: document.getElementById('btnWorkerLater'),
-      workBar:     document.getElementById('workBar'),
-      wbZuban:     document.getElementById('wbZuban'),
-      wbSub:       document.getElementById('wbSub'),
-      wbRemind:    document.getElementById('wbRemind'),
-      btnFinish:   document.getElementById('btnFinish'),
-      compactBar:  document.getElementById('compactBar'),
-      cbZuban:     document.getElementById('cbZuban'),
-      cbName:      document.getElementById('cbName'),
+    var STORE_WORK = 'zumen_currentWork', STORE_WORKER = 'zumen_worker';
 
-      startPanel:  document.getElementById('startPanel'),
-      spZuban:     document.getElementById('spZuban'),
-      spName:      document.getElementById('spName'),
-      spQtyHint:   document.getElementById('spQtyHint'),
-      qtyMinus:    document.getElementById('qtyMinus'),
-      qtyPlus:     document.getElementById('qtyPlus'),
-      qtyValue:    document.getElementById('qtyValue'),
-      btnStart:    document.getElementById('btnStart'),
-      btnViewOnly: document.getElementById('btnViewOnly'),
-
-      finishPanel: document.getElementById('finishPanel'),
-      fpZuban:     document.getElementById('fpZuban'),
-      fpSub:       document.getElementById('fpSub'),
-      btnAddProduct: document.getElementById('btnAddProduct'),
-      btnAddSlip:    document.getElementById('btnAddSlip'),
-      photoFile:   document.getElementById('photoFile'),
-      photoList:   document.getElementById('photoList'),
-      note:        document.getElementById('note'),
-      saveProgress:document.getElementById('saveProgress'),
-      btnSaveFinish: document.getElementById('btnSaveFinish'),
-      btnFinishBack: document.getElementById('btnFinishBack')
-    };
-
-    var scanner = null;
-    var scanning = false;
-    var lastCode = '';
-    var lastCodeAt = 0;
-    var currentPdf = null;
-    var cameraBlocked = false;
-
-    // ---- 作業ログの状態 ----
-    var currentWork = null;   // 進行中の作業 { logId, zuban, name, qty, worker, startedAt }
-    var pendingRow  = null;   // 着手確認中の図番情報（検索結果の 1 行目）
-    var pendingQty  = 1;      // ステッパーの値
-    var photos      = [];     // 撮った写真 [{ dataUrl }]
-    var elapsedTimer = null;
-    var currentWorker = '';   // いま選ばれている作業者
-    var workerList  = [];     // シートから取った氏名の一覧
-
-    var STORE_WORK   = 'zumen_currentWork';
-    var STORE_WORKER = 'zumen_worker';
-
-    // ===== メッセージ =====
-    function showStatus(text, kind) {
-      el.status.textContent = text;
-      el.status.className = 'show ' + (kind || 'info');
+    // ===================================================================
+    // 画面の切り替え
+    // プレビュー枠と操作バーは常に 1 つだけを表示する
+    // ===================================================================
+    function showLayer(name) {
+      ['camLayer','pdfLayer','frameLayer','listLayer','emptyLayer'].forEach(function (k) {
+        el[k].className = (k === name) ? 'layer show' : 'layer';
+      });
+      if (name === 'pdfLayer') el.pdfLayer.className = 'layer show';
     }
-    function hideStatus() { el.status.className = ''; }
+
+    function showBar(name) {
+      ['barScan','barCam','barPdf','barJudge'].forEach(function (k) {
+        el[k].className = (k === name) ? 'bar show' : 'bar';
+      });
+    }
+
+    function showMsg(text, kind) {
+      el.msg.textContent = text;
+      el.msg.className = 'show ' + (kind || 'info');
+    }
+    function hideMsg() { el.msg.className = ''; }
 
     function esc(s) {
       return String(s).replace(/[&<>"]/g, function (c) {
@@ -1071,128 +747,84 @@
       });
     }
 
-    // ===== 検索 =====
+    // ===================================================================
+    // 通信
+    // ===================================================================
+    function apiGet(query) {
+      return fetch(API_URL + query).then(function (r) { return r.json(); });
+    }
+
+    // 別サイトへの POST は application/json だと事前確認が飛んで失敗するため
+    // text/plain で送り、サーバー側で JSON として読み直している
+    function apiPost(payload) {
+      return fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      }).then(function (r) { return r.json(); });
+    }
+
+    // ===================================================================
+    // 図番の検索
+    // ===================================================================
     function doSearch(code) {
       code = (code || '').trim();
       if (!code) return;
 
-      showStatus('検索中… ' + code, 'info');
+      showMsg('検索中… ' + code, 'info');
       el.btnSearch.disabled = true;
+      el.suggest.className = '';
 
-      var url = API_URL + '?api=search&z=' + encodeURIComponent(code);
-
-      fetch(url)
-        .then(function (r) {
-          if (!r.ok) throw new Error('HTTP ' + r.status);
-          return r.json();
-        })
+      apiGet('?api=search&z=' + encodeURIComponent(code))
         .then(onResult)
         .catch(function () {
-          // 通信が塞がれている環境向けに JSONP で再挑戦する
-          jsonpSearch(code);
-        });
-    }
-
-    // CORS が使えない場合の逃げ道（script タグで読み込む方式）
-    function jsonpSearch(code) {
-      var cbName = 'zumenCb' + (new Date().getTime());
-      var script = document.createElement('script');
-      var done = false;
-
-      window[cbName] = function (res) {
-        done = true;
-        cleanup();
-        onResult(res);
-      };
-
-      function cleanup() {
-        try { delete window[cbName]; } catch (e) { window[cbName] = undefined; }
-        if (script.parentNode) script.parentNode.removeChild(script);
-      }
-
-      script.onerror = function () {
-        cleanup();
-        el.btnSearch.disabled = false;
-        showStatus('サーバーに接続できませんでした。通信環境を確認してください。', 'err');
-      };
-
-      script.src = API_URL + '?api=search&z=' + encodeURIComponent(code) + '&callback=' + cbName;
-      document.head.appendChild(script);
-
-      // 応答が無いまま終わった場合に備える
-      setTimeout(function () {
-        if (!done) {
-          cleanup();
           el.btnSearch.disabled = false;
-          showStatus('応答がありませんでした。もう一度お試しください。', 'err');
-        }
-      }, 15000);
+          showMsg('サーバーに接続できませんでした。通信環境を確認してください。', 'err');
+        });
     }
 
     function onResult(res) {
       el.btnSearch.disabled = false;
 
       if (!res || !res.ok) {
-        showStatus((res && res.message) || '見つかりませんでした。', 'err');
-        el.info.className = '';
+        showMsg((res && res.message) || '見つかりませんでした。', 'err');
+        el.infoBar.className = '';
         renderSuggest(res && res.similar);
+        showLayer('emptyLayer');
+        showBar('barScan');
         return;
       }
-      renderSuggest(null);
+      el.suggest.className = '';
 
       var rows = res.rows || [];
-      if (rows.length) {
-        var r = rows[0];
-        el.zuban.textContent = r.zuban;
-        el.name.textContent = r.name || '';
+      currentRow = rows.length ? rows[0] : null;
 
-        var specs = [];
-        if (r.material) specs.push('<span>材料 <b>' + esc(r.material) + '</b></span>');
-        if (r.length)   specs.push('<span>長さ <b>' + esc(r.length) + '</b></span>');
-        if (r.model)    specs.push('<span>機種 <b>' + esc(r.model) + '</b></span>');
-        if (r.qty)      specs.push('<span>数量 <b>' + esc(r.qty) + '</b></span>');
-        if (r.parts)    specs.push('<span>部品点数 <b>' + esc(r.parts) + '</b></span>');
-        el.specs.innerHTML = specs.join('');
-
-        if (rows.length > 1) {
-          var others = [];
-          for (var i = 1; i < rows.length; i++) others.push(rows[i].zuban);
-          el.variants.textContent = '同じ図面の別表記: ' + others.join(' / ');
-        } else {
-          el.variants.textContent = '';
-        }
-      } else {
-        el.zuban.textContent = res.key;
-        el.name.textContent = '';
-        el.specs.innerHTML = '';
-        el.variants.textContent = '';
-      }
-
-      el.scanned.textContent = '読取値: ' + res.query + '  →  照合キー: ' + res.key;
-      el.info.className = 'show';
+      el.ibZuban.textContent = currentRow ? currentRow.zuban : res.key;
+      el.ibName.textContent  = currentRow ? (currentRow.name || '') : '';
+      el.infoBar.className = 'show';
+      el.searchRow.className = 'hide';       // 図面を出したら検索欄は畳む
 
       if (res.pdf) {
         showDrawing(res.pdf);
-        el.actions.className = 'show';
-        addHistory(rows.length ? rows[0].zuban : res.query);
-
-        // 図面が出たら上部を畳んで、図面を大きく見せる
-        el.cbZuban.textContent = rows.length ? rows[0].zuban : res.key;
-        el.cbName.textContent  = rows.length ? (rows[0].name || '') : '';
-        setCompact(true);
-
-        // 図面が出たら、着手するか聞く。
-        // すでに別の作業が進行中のときは邪魔をしない（図面の参照とみなす）。
-        if (rows.length && !currentWork) openStartPanel(rows[0]);
+        if (currentRow) addHistoryless(currentRow.zuban);
+        if (currentRow && !currentWork && mode === 'work') openStartPanel(currentRow);
       } else {
         currentPdf = null;
-        clearDrawing();
-        el.actions.className = '';
-        showStatus(res.message || 'PDF が見つかりませんでした。', 'warn');
+        showLayer('emptyLayer');
+        showBar('barScan');
+        showMsg(res.message || 'この図番の PDF がまだ登録されていません。', 'warn');
       }
     }
 
-    // ===== 「もしかして」候補 =====
+    function addHistoryless(z) {   // 履歴は端末に持つだけ。画面は占有しない
+      try {
+        var list = JSON.parse(localStorage.getItem('zumen_history') || '[]');
+        list = list.filter(function (x) { return x !== z; });
+        list.unshift(z);
+        localStorage.setItem('zumen_history', JSON.stringify(list.slice(0, 10)));
+      } catch (e) {}
+    }
+
     function renderSuggest(list) {
       if (!list || !list.length) { el.suggest.className = ''; return; }
 
@@ -1213,87 +845,56 @@
     }
 
     // ===================================================================
-    // 図面の表示
-    //
-    // ドライブのビューアを埋め込むと、外側から拡大縮小を操作できない。
-    // 現場は軍手でピンチができずタッチペンを使うため、PDF を取り寄せて
-    // 自前で描き、＋−ボタンで拡大縮小できるようにしている。
-    // 読み込みに失敗したときだけ、従来どおりドライブのビューアに戻す。
+    // 図面（自前で描く）
+    // ドライブのビューアを埋め込むと外から拡大縮小を操作できないため。
+    // 現場は軍手でピンチができず、タッチペンで操作する。
     // ===================================================================
-    var pdfDoc = null;
-    var pdfPageNo = 1;
-    var pdfScale = 1;
-    var pdfTask = null;     // 進行中の描画。次の描画に入る前に取り消す
+    var pdfDoc = null, pdfPageNo = 1, pdfScale = 1, pdfTask = null;
 
     if (window.pdfjsLib) {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
     }
 
-    function showDrawing(pdfInfo) {
-      currentPdf = pdfInfo;
+    function showDrawing(info) {
+      currentPdf = info;
 
-      if (!window.pdfjsLib) { useDriveViewer(pdfInfo); return; }
+      if (!window.pdfjsLib) { useDriveViewer(info); return; }
+      showMsg('図面を読み込んでいます…', 'info');
 
-      showStatus('図面を読み込んでいます…', 'info');
-
-      fetch(API_URL + '?api=pdf&id=' + encodeURIComponent(pdfInfo.id))
-        .then(function (r) { return r.json(); })
+      apiGet('?api=pdf&id=' + encodeURIComponent(info.id))
         .then(function (res) {
           if (!res || !res.ok) throw new Error((res && res.message) || '取得できませんでした');
-
           var raw = atob(res.data);
           var bytes = new Uint8Array(raw.length);
           for (var i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-
           return pdfjsLib.getDocument({ data: bytes }).promise;
         })
         .then(function (doc) {
           pdfDoc = doc;
           pdfPageNo = 1;
-
-          el.pdf.className = '';
-          el.pdf.src = '';
-          el.pdfView.className = 'show';
-          el.placeholder.className = 'hide';
-          el.pdfCtrl.className = 'show';
+          showLayer('pdfLayer');
+          showBar('barPdf');
           el.pageGroup.className = doc.numPages > 1 ? 'pageGroup show' : 'pageGroup';
-
-          hideStatus();
-          renderPdfPage(true);       // 初回は幅に合わせる
+          hideMsg();
+          renderPdfPage(true);
         })
-        .catch(function () {
-          useDriveViewer(pdfInfo);   // 自前描画が駄目なら従来の方法に戻す
-        });
+        .catch(function () { useDriveViewer(info); });
     }
 
-    // 自前描画が使えない環境向け。ドライブのビューアをそのまま埋め込む。
-    function useDriveViewer(pdfInfo) {
+    function useDriveViewer(info) {
       pdfDoc = null;
-      el.pdfView.className = '';
-      el.pdfCtrl.className = '';
-      el.pageGroup.className = 'pageGroup';
-      el.pdf.src = pdfInfo.previewUrl;
-      el.pdf.className = 'show';
-      el.placeholder.className = 'hide';
-      hideStatus();
-    }
-
-    function clearDrawing() {
-      pdfDoc = null;
-      el.pdfView.className = '';
-      el.pdfCtrl.className = '';
-      el.pageGroup.className = 'pageGroup';
-      el.pdf.src = '';
-      el.pdf.className = '';
-      el.placeholder.className = '';
+      el.pdfFrame.src = info.previewUrl;
+      showLayer('frameLayer');
+      showBar('barScan');
+      hideMsg();
     }
 
     function renderPdfPage(fitWidth) {
       if (!pdfDoc) return;
 
-      // 前の描画が残っていれば取り消す。
-      // 「描画中フラグ」で入口を塞ぐ作りにすると、描画が終わらなかったときに
-      // 二度と拡大できなくなるため、取り消して always 描き直す形にしている。
+      // 前の描画を取り消して常に描き直す。
+      // 「描画中フラグ」で入口を塞ぐ作りだと、描画が終わらなかった時に
+      // 二度と拡大できなくなるため。
       if (pdfTask) {
         try { pdfTask.cancel(); } catch (e) {}
         pdfTask = null;
@@ -1303,31 +904,27 @@
         var base = page.getViewport({ scale: 1 });
 
         if (fitWidth) {
-          var avail = el.pdfView.clientWidth - 20;
+          var avail = el.pdfLayer.clientWidth - 16;
           if (avail > 0) pdfScale = avail / base.width;
         }
 
-        // 端末の画素密度に合わせて描くと、拡大しても文字が潰れない
         var dpr = window.devicePixelRatio || 1;
         var vp = page.getViewport({ scale: pdfScale * dpr });
         var canvas = el.pdfCanvas;
 
-        canvas.width  = Math.floor(vp.width);
+        canvas.width = Math.floor(vp.width);
         canvas.height = Math.floor(vp.height);
-        canvas.style.width  = Math.floor(vp.width / dpr) + 'px';
+        canvas.style.width = Math.floor(vp.width / dpr) + 'px';
         canvas.style.height = Math.floor(vp.height / dpr) + 'px';
 
-        updatePdfLabels();   // 倍率の表示は描画の完了を待たずに更新する
+        updatePdfLabels();
 
-        pdfTask = page.render({
-          canvasContext: canvas.getContext('2d'),
-          viewport: vp
-        });
+        pdfTask = page.render({ canvasContext: canvas.getContext('2d'), viewport: vp });
         return pdfTask.promise;
       }).then(function () {
         pdfTask = null;
       }).catch(function () {
-        pdfTask = null;      // 取り消し時もここに来る。次の描画は妨げない
+        pdfTask = null;
       });
     }
 
@@ -1336,99 +933,78 @@
       if (pdfDoc) el.pageInfo.textContent = pdfPageNo + '/' + pdfDoc.numPages;
     }
 
-    function zoomBy(factor) {
+    function zoomBy(f) {
       if (!pdfDoc) return;
-      pdfScale = Math.min(8, Math.max(0.2, pdfScale * factor));
+      pdfScale = Math.min(8, Math.max(0.2, pdfScale * f));
       renderPdfPage(false);
     }
 
-    el.zoomIn.onclick  = function () { zoomBy(1.25); };
+    el.zoomIn.onclick = function () { zoomBy(1.25); };
     el.zoomOut.onclick = function () { zoomBy(0.8); };
     el.fitWidth.onclick = function () { renderPdfPage(true); };
-
-    el.pagePrev.onclick = function () {
-      if (!pdfDoc || pdfPageNo <= 1) return;
-      pdfPageNo--;
-      renderPdfPage(false);
-    };
-    el.pageNext.onclick = function () {
-      if (!pdfDoc || pdfPageNo >= pdfDoc.numPages) return;
-      pdfPageNo++;
-      renderPdfPage(false);
+    el.pagePrev.onclick = function () { if (pdfDoc && pdfPageNo > 1) { pdfPageNo--; renderPdfPage(false); } };
+    el.pageNext.onclick = function () { if (pdfDoc && pdfPageNo < pdfDoc.numPages) { pdfPageNo++; renderPdfPage(false); } };
+    el.btnBackScan.onclick = function () {
+      el.searchRow.className = '';
+      showLayer('emptyLayer');
+      showBar('barScan');
     };
 
-    // タッチペンでも図面を動かせるよう、ドラッグでスクロールできるようにする
+    // タッチペンでも図面を動かせるようにする
     (function () {
       var dragging = false, sx = 0, sy = 0, sl = 0, st = 0;
-
-      el.pdfView.addEventListener('pointerdown', function (e) {
-        dragging = true;
-        sx = e.clientX; sy = e.clientY;
-        sl = el.pdfView.scrollLeft; st = el.pdfView.scrollTop;
-        el.pdfView.className = 'show dragging';
+      el.pdfLayer.addEventListener('pointerdown', function (e) {
+        dragging = true; sx = e.clientX; sy = e.clientY;
+        sl = el.pdfLayer.scrollLeft; st = el.pdfLayer.scrollTop;
+        el.pdfLayer.className = 'layer show dragging';
       });
-
-      el.pdfView.addEventListener('pointermove', function (e) {
+      el.pdfLayer.addEventListener('pointermove', function (e) {
         if (!dragging) return;
-        el.pdfView.scrollLeft = sl - (e.clientX - sx);
-        el.pdfView.scrollTop  = st - (e.clientY - sy);
+        el.pdfLayer.scrollLeft = sl - (e.clientX - sx);
+        el.pdfLayer.scrollTop = st - (e.clientY - sy);
       });
-
-      function endDrag() {
+      function end() {
         if (!dragging) return;
         dragging = false;
-        el.pdfView.className = 'show';
+        el.pdfLayer.className = 'layer show';
       }
-      el.pdfView.addEventListener('pointerup', endDrag);
-      el.pdfView.addEventListener('pointercancel', endDrag);
-      el.pdfView.addEventListener('pointerleave', endDrag);
+      el.pdfLayer.addEventListener('pointerup', end);
+      el.pdfLayer.addEventListener('pointercancel', end);
+      el.pdfLayer.addEventListener('pointerleave', end);
     })();
 
-    // 画面の向きが変わったら幅に合わせ直す
     window.addEventListener('resize', function () {
-      if (pdfDoc) renderPdfPage(true);
+      if (pdfDoc && el.pdfLayer.className.indexOf('show') >= 0) renderPdfPage(true);
     });
 
-    // ===== 図面を大きく見るための折りたたみ =====
-    // 検査モードのクラスと共存させるため、className を上書きせず切り替える
-    function setCompact(on) {
-      document.body.classList.toggle('compact', on);
-    }
-    el.compactBar.onclick = function () { setCompact(false); };
-
-    // ===== カメラ（ライブ）=====
+    // ===================================================================
+    // カメラ
+    // ===================================================================
     function startScan() {
-      setCompact(false);          // カメラを出すときは畳みを解除する
       if (scanning) { stopScan(); return; }
-
       if (typeof Html5Qrcode === 'undefined') {
-        showStatus('スキャナを読み込めませんでした。通信環境を確認してください。', 'err');
+        showMsg('スキャナを読み込めませんでした。通信環境を確認してください。', 'err');
         return;
       }
 
-      el.scanWrap.className = 'open';
-      el.btnScan.textContent = '停止';
-      showStatus('カメラを起動しています…', 'info');
+      showLayer('camLayer');
+      showBar('barCam');
+      showMsg('カメラを起動しています…', 'info');
+      el.searchRow.className = '';
 
       if (!scanner) scanner = new Html5Qrcode('reader');
 
       var config = {
         fps: 10,
-
-        // 読み取り枠は画面の 65% の正方形。
-        // 小さい QR でも「枠いっぱいに写す」目安になるようにしている。
         qrbox: function (vw, vh) {
-          var size = Math.floor(Math.min(vw, vh) * 0.65);
+          var size = Math.floor(Math.min(vw, vh) * 0.7);
           return { width: size, height: size };
         },
-        aspectRatio: 1.0,
         experimentalFeatures: { useBarCodeDetectorIfSupported: true },
-
-        // 指示書の QR は小さいので、カメラの解像度を上げないと潰れて読めない。
-        // 既定では 640x480 程度になることがあるため、明示的に高解像度を要求する。
+        // 指示書の QR は小さい。既定の 640x480 では潰れて読めない
         videoConstraints: {
           facingMode: 'environment',
-          width:  { ideal: 1920 },
+          width: { ideal: 1920 },
           height: { ideal: 1080 },
           advanced: [{ focusMode: 'continuous' }]
         }
@@ -1442,245 +1018,169 @@
         ];
       }
 
-      scanner.start({ facingMode: 'environment' }, config, onScanSuccess, function () { /* 毎フレーム呼ばれるので何もしない */ })
-        .then(function () {
-          scanning = true;
-          hideStatus();
-          setupCameraControls();
-        })
+      scanner.start({ facingMode: 'environment' }, config, onScanSuccess, function () {})
+        .then(function () { scanning = true; hideMsg(); setupCameraControls(); })
         .catch(function (err) {
           scanning = false;
           cameraBlocked = true;
-          el.scanWrap.className = '';
-          el.btnScan.textContent = 'カメラで読取';
-          showStatus(cameraErrorMessage(err), 'err');
+          showLayer('emptyLayer');
+          showBar('barScan');
+          showMsg(cameraErrorMessage(err), 'err');
         });
     }
 
-    // ===== カメラのズーム・ライト =====
-    // 小さい QR に寄れないのが最大の壁なので、ズームを使えるようにする。
-    // 端末が対応していない場合は、その操作だけ隠す（動作には影響しない）。
     function setupCameraControls() {
-      var shown = false;
-
       try {
         var caps = scanner.getRunningTrackCameraCapabilities();
 
-        // --- ズーム ---
-        var zoomCap = caps.zoomFeature && caps.zoomFeature();
-        if (zoomCap && zoomCap.isSupported()) {
-          var min = zoomCap.min(), max = zoomCap.max(), step = zoomCap.step();
-          el.zoom.min = min;
-          el.zoom.max = max;
-          el.zoom.step = step || 0.1;
-
-          // 小さい QR 前提なので、最初から 2 倍まで寄せておく
-          var initial = Math.min(2, max);
-          el.zoom.value = initial;
-          zoomCap.apply(initial);
-          el.zoomLabel.textContent = initial.toFixed(1) + 'x';
-
+        var z = caps.zoomFeature && caps.zoomFeature();
+        if (z && z.isSupported()) {
+          el.zoom.min = z.min(); el.zoom.max = z.max(); el.zoom.step = z.step() || 0.1;
+          var init = Math.min(2, z.max());        // 小さい QR 前提で最初から寄せておく
+          el.zoom.value = init;
+          z.apply(init);
+          el.zoomLabel.textContent = init.toFixed(1) + 'x';
           el.zoom.oninput = function () {
             var v = parseFloat(el.zoom.value);
             el.zoomLabel.textContent = v.toFixed(1) + 'x';
-            try { zoomCap.apply(v); } catch (e) {}
+            try { z.apply(v); } catch (e) {}
           };
-          el.zoom.style.display = '';
-          el.zoomLabel.style.display = '';
-          shown = true;
+          el.zoom.style.display = ''; el.zoomLabel.style.display = '';
         } else {
-          el.zoom.style.display = 'none';
-          el.zoomLabel.style.display = 'none';
+          el.zoom.style.display = 'none'; el.zoomLabel.style.display = 'none';
         }
 
-        // --- ライト（暗い場所や、光沢紙で読みにくい時に）---
-        var torchCap = caps.torchFeature && caps.torchFeature();
-        if (torchCap && torchCap.isSupported()) {
+        var t = caps.torchFeature && caps.torchFeature();
+        if (t && t.isSupported()) {
           el.btnTorch.style.display = '';
-          el.btnTorch.textContent = 'ライト ON';
+          el.btnTorch.textContent = 'ライト';
           el.btnTorch.onclick = function () {
-            var next = !torchCap.value();
-            try {
-              torchCap.apply(next);
-              el.btnTorch.textContent = next ? 'ライト OFF' : 'ライト ON';
-            } catch (e) {}
+            var next = !t.value();
+            try { t.apply(next); el.btnTorch.className = next ? '' : 'ghost'; } catch (e) {}
           };
-          shown = true;
         } else {
           el.btnTorch.style.display = 'none';
         }
-      } catch (e) {
-        // この機能に対応していない端末では、静かに諦める
-      }
-
-      el.camCtrl.className = shown ? 'show' : '';
+      } catch (e) {}
     }
 
     function cameraErrorMessage(err) {
       var s = String((err && (err.name || err.message)) || err);
       if (s.indexOf('NotAllowed') >= 0 || s.indexOf('Permission') >= 0) {
-        return 'カメラの使用が許可されていません。ブラウザの設定でこのサイトのカメラを許可するか、「写真で読取」をお使いください。';
+        return 'カメラの使用が許可されていません。ブラウザの設定で許可するか、「写真で読取」をお使いください。';
       }
-      if (s.indexOf('NotFound') >= 0 || s.indexOf('DevicesNotFound') >= 0) {
-        return 'カメラが見つかりませんでした。「写真で読取」または図番の手入力をお使いください。';
-      }
-      if (s.indexOf('NotReadable') >= 0 || s.indexOf('TrackStart') >= 0) {
-        return 'カメラが他のアプリで使用中です。そのアプリを閉じてからお試しください。';
-      }
-      return 'カメラを起動できませんでした（' + s + '）。「写真で読取」をお使いください。';
+      if (s.indexOf('NotFound') >= 0) return 'カメラが見つかりませんでした。「写真で読取」をお使いください。';
+      if (s.indexOf('NotReadable') >= 0) return 'カメラが他のアプリで使用中です。';
+      return 'カメラを起動できませんでした。「写真で読取」をお使いください。';
     }
 
     function stopScan() {
-      if (!scanner || !scanning) {
-        el.scanWrap.className = '';
-        el.btnScan.textContent = 'カメラで読取';
-        return;
-      }
-      scanner.stop().then(finish).catch(finish);
-
-      function finish() {
+      function done() {
         scanning = false;
-        el.scanWrap.className = '';
-        el.camCtrl.className = '';
-        el.btnScan.textContent = 'カメラで読取';
+        showLayer(currentPdf && pdfDoc ? 'pdfLayer' : 'emptyLayer');
+        showBar(currentPdf && pdfDoc ? 'barPdf' : 'barScan');
       }
+      if (!scanner || !scanning) { done(); return; }
+      scanner.stop().then(done).catch(done);
     }
 
-    function onScanSuccess(decodedText) {
-      var now = new Date().getTime();
-      if (decodedText === lastCode && now - lastCodeAt < 2000) return;   // 同じコードの連続読みを無視
-      lastCode = decodedText;
-      lastCodeAt = now;
+    el.btnStopScan.onclick = stopScan;
 
+    function onScanSuccess(text) {
+      var now = new Date().getTime();
+      if (text === lastCode && now - lastCodeAt < 2000) return;
+      lastCode = text; lastCodeAt = now;
       buzz();
-      el.q.value = decodedText;
+      el.q.value = text;
       stopScan();
-      doSearch(decodedText);
+      doSearch(text);
     }
 
     function buzz() {
       if (navigator.vibrate) { try { navigator.vibrate(60); } catch (e) {} }
     }
 
-    // ===== 写真から読み取る（カメラが使えない時の保険）=====
+    // ---- 写真から読み取る（カメラが使えない環境の保険）----
+    el.camFile.onchange = function (e) {
+      var f = e.target.files && e.target.files[0];
+      e.target.value = '';
+      if (f) decodePhoto(f);
+    };
+
     function decodePhoto(file) {
-      if (!file) return;
-      showStatus('画像を解析しています…', 'info');
+      showMsg('画像を解析しています…', 'info');
       if (scanning) stopScan();
 
       if (window.BarcodeDetector && window.createImageBitmap) {
         try {
           var det = new BarcodeDetector();
           createImageBitmap(file)
-            .then(function (bmp) { return det.detect(bmp); })
+            .then(function (b) { return det.detect(b); })
             .then(function (codes) {
-              if (codes && codes.length) { onPhotoDecoded(codes[0].rawValue); }
-              else { decodePhotoFallback(file); }
+              if (codes && codes.length) onPhotoDecoded(codes[0].rawValue);
+              else decodeTiles(file);
             })
-            .catch(function () { decodePhotoFallback(file); });
+            .catch(function () { decodeTiles(file); });
           return;
-        } catch (e) { /* 下へ */ }
+        } catch (e) {}
       }
-      decodePhotoFallback(file);
+      decodeTiles(file);
     }
 
-    function decodePhotoFallback(file) {
+    // 紙面全体だと QR が小さすぎるので、切り出して拡大しながら探す
+    function decodeTiles(file) {
       if (typeof Html5Qrcode === 'undefined') {
-        showStatus('読み取り機能を読み込めませんでした。図番を手入力してください。', 'err');
+        showMsg('読み取り機能を読み込めませんでした。図番を手入力してください。', 'err');
         return;
       }
       if (!scanner) scanner = new Html5Qrcode('reader');
 
-      el.scanWrap.className = 'open';   // scanFile は表示領域を必要とする
-      scanner.scanFile(file, false)
-        .then(function (text) {
-          el.scanWrap.className = '';
-          onPhotoDecoded(text);
-        })
-        .catch(function () {
-          // 写真全体では読めなかった。
-          // QR が小さく写っている場合は、切り出して拡大すると読めることがある。
-          decodePhotoTiles(file);
-        });
-    }
+      scanner.scanFile(file, false).then(onPhotoDecoded).catch(function () {
+        var img = new Image();
+        var url = URL.createObjectURL(file);
 
-    // 写真を格子状に切り出し、1 枚ずつ拡大して読み取りを試す。
-    // 指示書の QR は紙面のごく一部なので、全体を一度に見ると小さすぎて認識できない。
-    function decodePhotoTiles(file) {
-      var img = new Image();
-      var url = URL.createObjectURL(file);
+        img.onload = function () {
+          URL.revokeObjectURL(url);
+          var G = 3, OV = 0.3;
+          var tw = img.width / G, th = img.height / G;
+          var c = (G - 1) / 2;
+          var regions = [];
 
-      img.onload = function () {
-        URL.revokeObjectURL(url);
-
-        var GRID = 3;      // 3x3 に分割
-        var OVERLAP = 0.3; // 境界にまたがる QR を拾うため、隣と 30% 重ねる
-        var tw = img.width / GRID;
-        var th = img.height / GRID;
-        var center = (GRID - 1) / 2;
-        var regions = [];
-
-        for (var y = 0; y < GRID; y++) {
-          for (var x = 0; x < GRID; x++) {
-            regions.push({
-              sx: Math.max(0, (x - OVERLAP) * tw),
-              sy: Math.max(0, (y - OVERLAP) * th),
-              sw: Math.min(img.width,  tw * (1 + 2 * OVERLAP)),
-              sh: Math.min(img.height, th * (1 + 2 * OVERLAP)),
-              d:  Math.abs(x - center) + Math.abs(y - center)
-            });
-          }
-        }
-        // 中央に近いところから試す（狙って撮れば中央付近にあるはず）
-        regions.sort(function (a, b) { return a.d - b.d; });
-
-        tryRegion(0);
-
-        function tryRegion(i) {
-          if (i >= regions.length) {
-            el.scanWrap.className = '';
-            showStatus('画像から QR を読み取れませんでした。QR に近づけて、画面いっぱいに写して撮り直してください。図番の手入力でも検索できます。', 'err');
-            return;
-          }
-
-          showStatus('画像を解析しています… (' + (i + 1) + '/' + regions.length + ')', 'info');
-
-          var r = regions[i];
-          var scale = 2;   // 切り出したうえで 2 倍に拡大する
-          var canvas = document.createElement('canvas');
-          canvas.width  = Math.round(r.sw * scale);
-          canvas.height = Math.round(r.sh * scale);
-
-          var ctx = canvas.getContext('2d');
-          ctx.drawImage(img, r.sx, r.sy, r.sw, r.sh, 0, 0, canvas.width, canvas.height);
-
-          canvas.toBlob(function (blob) {
-            if (!blob) { tryRegion(i + 1); return; }
-
-            var part;
-            try {
-              part = new File([blob], 'tile.png', { type: 'image/png' });
-            } catch (e) {
-              part = blob;   // File が使えない環境では Blob のまま渡す
+          for (var y = 0; y < G; y++) {
+            for (var x = 0; x < G; x++) {
+              regions.push({
+                sx: Math.max(0, (x - OV) * tw), sy: Math.max(0, (y - OV) * th),
+                sw: Math.min(img.width, tw * (1 + 2 * OV)), sh: Math.min(img.height, th * (1 + 2 * OV)),
+                d: Math.abs(x - c) + Math.abs(y - c)
+              });
             }
+          }
+          regions.sort(function (a, b) { return a.d - b.d; });
+          tryRegion(0);
 
-            scanner.scanFile(part, false)
-              .then(function (text) {
-                el.scanWrap.className = '';
-                onPhotoDecoded(text);
-              })
-              .catch(function () { tryRegion(i + 1); });
-          }, 'image/png');
-        }
-      };
+          function tryRegion(i) {
+            if (i >= regions.length) {
+              showMsg('QR を読み取れませんでした。近づけて撮り直すか、図番を手入力してください。', 'err');
+              return;
+            }
+            showMsg('画像を解析しています… (' + (i + 1) + '/' + regions.length + ')', 'info');
 
-      img.onerror = function () {
-        URL.revokeObjectURL(url);
-        el.scanWrap.className = '';
-        showStatus('画像を読み込めませんでした。', 'err');
-      };
+            var r = regions[i], sc = 2;
+            var cv = document.createElement('canvas');
+            cv.width = Math.round(r.sw * sc); cv.height = Math.round(r.sh * sc);
+            cv.getContext('2d').drawImage(img, r.sx, r.sy, r.sw, r.sh, 0, 0, cv.width, cv.height);
 
-      img.src = url;
+            cv.toBlob(function (blob) {
+              if (!blob) { tryRegion(i + 1); return; }
+              var part;
+              try { part = new File([blob], 'tile.png', { type: 'image/png' }); } catch (e) { part = blob; }
+              scanner.scanFile(part, false).then(onPhotoDecoded).catch(function () { tryRegion(i + 1); });
+            }, 'image/png');
+          }
+        };
+        img.onerror = function () { URL.revokeObjectURL(url); showMsg('画像を読み込めませんでした。', 'err'); };
+        img.src = url;
+      });
     }
 
     function onPhotoDecoded(text) {
@@ -1689,72 +1189,19 @@
       doSearch(text);
     }
 
-    // ===== 履歴（この端末にだけ残る）=====
-    function loadHistory() {
-      try {
-        var raw = localStorage.getItem('zumen_history');
-        return raw ? JSON.parse(raw) : [];
-      } catch (e) { return []; }
-    }
-    function addHistory(zuban) {
-      if (!zuban) return;
-      var list = loadHistory().filter(function (x) { return x !== zuban; });
-      list.unshift(zuban);
-      list = list.slice(0, 8);
-      try { localStorage.setItem('zumen_history', JSON.stringify(list)); } catch (e) {}
-      renderHistory();
-    }
-    function renderHistory() {
-      var list = loadHistory();
-      if (!list.length) { el.history.className = ''; return; }
-      el.history.innerHTML = '';
-      list.forEach(function (z) {
-        var b = document.createElement('button');
-        b.className = 'chip';
-        b.textContent = z;
-        b.onclick = function () { el.q.value = z; doSearch(z); };
-        el.history.appendChild(b);
-      });
-      el.history.className = 'show';
-    }
-
     // ===================================================================
-    // 作業ログ（着手 → 完了）
+    // 作業者
     // ===================================================================
-
-    // GAS へ書き込む。application/json だと事前確認が飛んで失敗するため
-    // text/plain で送り、サーバー側で JSON として読み直している。
-    function apiPost(payload) {
-      return fetch(API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(payload)
-      }).then(function (r) { return r.json(); });
-    }
-
-    // ---- 作業者 ----
-    // 部署共用の端末なので、起動時に必ず選ばせる。
-    // 前回の人を先頭に出しておき、同じ人なら 1 タップで済むようにしている。
     function loadWorkers() {
-      fetch(API_URL + '?api=workers')
-        .then(function (r) { return r.json(); })
+      apiGet('?api=workers')
         .then(function (res) {
           workerList = (res && res.ok && res.workers) ? res.workers : [];
-
-          // 作業の途中で開き直した場合は、その作業者を引き継ぐ（選び直させない）
-          if (currentWork && currentWork.worker) {
-            setWorker(currentWork.worker);
-            return;
-          }
-
+          if (currentWork && currentWork.worker) { setWorker(currentWork.worker); return; }
           var saved = '';
           try { saved = localStorage.getItem(STORE_WORKER) || ''; } catch (e) {}
           openWorkerPanel(saved);
         })
-        .catch(function () {
-          // 一覧が取れなくても図面は見られる。作業者は未選択のままにする。
-          setWorker('');
-        });
+        .catch(function () { setWorker(''); });
     }
 
     function setWorker(w) {
@@ -1771,9 +1218,7 @@
         el.workerList.style.display = 'none';
         el.workerEmpty.style.display = '';
         el.workerEmpty.innerHTML =
-          '作業者が登録されていません。<br>'
-          + 'スプレッドシートの<b>「作業者」シート</b>に氏名を入れてから、'
-          + 'この画面を開き直してください。';
+          '作業者が登録されていません。<br>スプレッドシートの<b>「作業者」シート</b>に氏名を入れてから、この画面を開き直してください。';
         el.workerPanel.className = 'panel show';
         return;
       }
@@ -1781,7 +1226,6 @@
       el.workerList.style.display = '';
       el.workerEmpty.style.display = 'none';
 
-      // 前回の人を先頭へ
       var names = workerList.slice();
       if (preferred && names.indexOf(preferred) >= 0) {
         names.splice(names.indexOf(preferred), 1);
@@ -1791,7 +1235,6 @@
       names.forEach(function (w) {
         var b = document.createElement('button');
         b.type = 'button';
-
         if (w === preferred) {
           b.className = 'ghost recent';
           b.appendChild(document.createTextNode(w));
@@ -1803,83 +1246,57 @@
           b.className = 'ghost';
           b.textContent = w;
         }
-
-        b.onclick = function () {
-          setWorker(w);
-          el.workerPanel.className = 'panel';
-        };
+        b.onclick = function () { setWorker(w); el.workerPanel.className = 'panel'; };
         el.workerList.appendChild(b);
       });
 
       el.workerPanel.className = 'panel show';
     }
 
-    // ヘッダーの名前をタップすると、いつでも選び直せる
     el.workerBtn.onclick = function () { openWorkerPanel(currentWorker); };
     el.btnWorkerLater.onclick = function () { el.workerPanel.className = 'panel'; };
 
-    // ---- 着手の確認パネル ----
+    // ===================================================================
+    // 着手 → 完了
+    // ===================================================================
     function openStartPanel(row) {
       pendingRow = row;
       pendingQty = 1;
-
       el.spZuban.textContent = row.zuban;
-      el.spName.textContent  = row.name || '';
+      el.spName.textContent = row.name || '';
       el.spQtyHint.textContent = row.qty ? '（指示書上の数量: ' + row.qty + '）' : '';
       el.qtyValue.textContent = pendingQty;
-
       el.startPanel.className = 'panel show';
-    }
-
-    function closeStartPanel() {
-      el.startPanel.className = 'panel';
-      pendingRow = null;
     }
 
     function setQty(n) {
       pendingQty = Math.min(99, Math.max(1, n));
       el.qtyValue.textContent = pendingQty;
     }
-
     el.qtyMinus.onclick = function () { setQty(pendingQty - 1); };
-    el.qtyPlus.onclick  = function () { setQty(pendingQty + 1); };
-    el.btnViewOnly.onclick = closeStartPanel;
+    el.qtyPlus.onclick = function () { setQty(pendingQty + 1); };
+    el.btnViewOnly.onclick = function () { el.startPanel.className = 'panel'; };
 
     el.btnStart.onclick = function () {
-      if (!currentWorker) {
-        openWorkerPanel('');    // 未選択なら、その場で選ばせる
-        return;
-      }
+      if (!currentWorker) { openWorkerPanel(''); return; }
       if (!pendingRow) return;
 
-      var row = pendingRow;
-      var qty = pendingQty;
+      var row = pendingRow, qty = pendingQty;
       el.btnStart.disabled = true;
 
       apiPost({
-        action: 'start',
-        worker: currentWorker,
-        zuban:  row.zuban,
-        name:   row.name,
-        model:  row.model,
-        qty:    qty,
-        stdTime: row.stdTime || ''
+        action: 'start', worker: currentWorker, zuban: row.zuban,
+        name: row.name, model: row.model, qty: qty, stdTime: row.stdTime || ''
       }).then(function (res) {
         el.btnStart.disabled = false;
-        if (!res || !res.ok) {
-          alert('着手を記録できませんでした。' + ((res && res.message) || ''));
-          return;
-        }
+        if (!res || !res.ok) { alert('着手を記録できませんでした。' + ((res && res.message) || '')); return; }
+
         currentWork = {
-          logId: res.logId,
-          zuban: row.zuban,
-          name:  row.name,
-          qty:   qty,
-          worker: currentWorker,
-          startedAt: res.startedAt || (new Date().getTime())
+          logId: res.logId, zuban: row.zuban, name: row.name, qty: qty,
+          worker: currentWorker, startedAt: res.startedAt || new Date().getTime()
         };
         saveWork();
-        closeStartPanel();
+        el.startPanel.className = 'panel';
         renderWorkBar();
       }).catch(function () {
         el.btnStart.disabled = false;
@@ -1887,7 +1304,6 @@
       });
     };
 
-    // ---- 作業中バー ----
     function saveWork() {
       try {
         if (currentWork) localStorage.setItem(STORE_WORK, JSON.stringify(currentWork));
@@ -1904,10 +1320,10 @@
     }
 
     function renderWorkBar() {
-      if (!currentWork) {
+      if (!currentWork || mode !== 'work') {
         el.workBar.className = '';
         el.wbRemind.className = '';
-        if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
+        if (remindTimer) { clearInterval(remindTimer); remindTimer = null; }
         return;
       }
       el.wbZuban.textContent = currentWork.zuban;
@@ -1915,80 +1331,64 @@
       el.workBar.className = 'show';
 
       checkForgotten();
-      if (!elapsedTimer) elapsedTimer = setInterval(checkForgotten, 60000);   // 1 分ごとで足りる
+      if (!remindTimer) remindTimer = setInterval(checkForgotten, 60000);
     }
 
-    // 経過時間は画面に出さない。作業を急かさないため。
-    // ただし完了の押し忘れは実際に起きるので、長く経ったときだけ声をかける。
-    var REMIND_AFTER_MIN = 240;   // 4 時間
+    // 経過時間は画面に出さない（作業を急かさないため）。
+    // ただし完了の押し忘れは実際に起きるので、そこだけは声をかける。
+    var REMIND_AFTER_MIN = 240;
 
     function checkForgotten() {
       if (!currentWork) return;
       var min = (new Date().getTime() - currentWork.startedAt) / 60000;
-
       if (min >= REMIND_AFTER_MIN) {
-        el.wbRemind.textContent =
-          'この作業を始めてからかなり経っています。完了を押し忘れていませんか？';
+        el.wbRemind.textContent = 'この作業を始めてからかなり経っています。完了を押し忘れていませんか？';
         el.wbRemind.className = 'show';
       } else {
         el.wbRemind.className = '';
       }
     }
 
-    // ---- 完了パネル ----
     el.btnFinish.onclick = function () {
       if (!currentWork) return;
       photos = [];
       el.note.value = '';
       el.photoList.innerHTML = '';
       el.saveProgress.className = '';
-
       el.fpZuban.textContent = currentWork.zuban;
       el.fpSub.textContent = (currentWork.name || '') + '　' + currentWork.qty + '本';
-
       el.finishPanel.className = 'panel show';
     };
-
     el.btnFinishBack.onclick = function () { el.finishPanel.className = 'panel'; };
 
-    // ---- 写真 ----
-    var pendingKind = 'product';   // いま撮ろうとしているのは製品か伝票か
-
     el.btnAddProduct.onclick = function () { pendingKind = 'product'; el.photoFile.click(); };
-    el.btnAddSlip.onclick    = function () { pendingKind = 'slip';    el.photoFile.click(); };
+    el.btnAddSlip.onclick = function () { pendingKind = 'slip'; el.photoFile.click(); };
 
     el.photoFile.onchange = function (e) {
-      var file = e.target.files && e.target.files[0];
+      var f = e.target.files && e.target.files[0];
       e.target.value = '';
-      if (!file) return;
+      if (!f) return;
 
       var kind = pendingKind;
-
-      // 送る前に縮小する。原寸のままだと現場の電波では時間がかかりすぎる。
-      // 伝票は文字を読めることが大事なので、製品より少し大きめに残す。
-      var maxSize = (kind === 'slip') ? 2000 : 1600;
-
-      shrinkImage(file, maxSize, 0.75).then(function (dataUrl) {
+      // 伝票は文字が読めることが大事なので、製品より少し大きめに残す
+      shrinkImage(f, kind === 'slip' ? 2000 : 1600, 0.75).then(function (dataUrl) {
         photos.push({ dataUrl: dataUrl, kind: kind });
         renderPhotos();
-      }).catch(function () {
-        alert('写真を読み込めませんでした。');
-      });
+      }).catch(function () { alert('写真を読み込めませんでした。'); });
     };
 
     function shrinkImage(file, maxSize, quality) {
       return new Promise(function (resolve, reject) {
         var img = new Image();
         var url = URL.createObjectURL(file);
-
         img.onload = function () {
           URL.revokeObjectURL(url);
-          var scale = Math.min(1, maxSize / Math.max(img.width, img.height));
-          var canvas = document.createElement('canvas');
-          canvas.width  = Math.round(img.width  * scale);
-          canvas.height = Math.round(img.height * scale);
-          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-          resolve(canvas.toDataURL('image/jpeg', quality));
+          var sc = Math.min(1, maxSize / Math.max(img.width, img.height));
+          var cv = document.createElement('canvas');
+          cv.width = Math.round(img.width * sc);
+          cv.height = Math.round(img.height * sc);
+          cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+          resolve(cv.toDataURL('image/jpeg', quality));
         };
         img.onerror = function () { URL.revokeObjectURL(url); reject(); };
         img.src = url;
@@ -2007,13 +1407,11 @@
 
         var tag = document.createElement('span');
         tag.className = 'kind' + (p.kind === 'slip' ? ' slip' : '');
-        tag.textContent = (p.kind === 'slip') ? '伝票' : '製品';
+        tag.textContent = p.kind === 'slip' ? '伝票' : '製品';
         box.appendChild(tag);
 
         var del = document.createElement('button');
-        del.className = 'del';
-        del.type = 'button';
-        del.textContent = '×';
+        del.className = 'del'; del.type = 'button'; del.textContent = '×';
         del.onclick = function () { photos.splice(i, 1); renderPhotos(); };
         box.appendChild(del);
 
@@ -2027,133 +1425,122 @@
       return n;
     }
 
-    // ---- 記録して完了 ----
     el.btnSaveFinish.onclick = function () {
       if (!currentWork) return;
+      if (countPhotos('product') === 0) { alert('製品の写真を 1 枚以上撮ってください。'); return; }
 
-      // 製品の写真は証跡として必ず要るので、ここは通さない
-      if (countPhotos('product') === 0) {
-        alert('製品の写真を 1 枚以上撮ってください。');
-        return;
-      }
       el.btnSaveFinish.disabled = true;
       el.saveProgress.className = 'show';
 
-      // 写真を 1 枚ずつ送る。まとめて送ると重く、失敗時にやり直しが大きいため。
-      var uploaded = [];
-      var folderUrl = '';
+      var uploaded = [], folderUrl = '';
 
+      // 写真は 1 枚ずつ送る。まとめると重く、失敗時のやり直しが大きい
       function next(i) {
         if (i >= photos.length) { finalize(); return; }
-
         el.saveProgress.textContent = '写真を保存しています… (' + (i + 1) + '/' + photos.length + ')';
 
         apiPost({
-          action: 'photo',
-          logId:  currentWork.logId,
-          zuban:  currentWork.zuban,
-          worker: currentWork.worker,
-          index:  i + 1,
-          kind:   photos[i].kind,
-          dataUrl: photos[i].dataUrl
+          action: 'photo', logId: currentWork.logId, zuban: currentWork.zuban,
+          worker: currentWork.worker, index: i + 1, kind: photos[i].kind, dataUrl: photos[i].dataUrl
         }).then(function (res) {
           if (res && res.ok) {
             uploaded.push({ url: res.url, name: res.name, kind: res.kind });
             folderUrl = res.folderUrl || folderUrl;
           }
           next(i + 1);
-        }).catch(function () {
-          next(i + 1);   // 1 枚失敗しても残りは続ける
-        });
+        }).catch(function () { next(i + 1); });
       }
 
       function finalize() {
         el.saveProgress.textContent = '記録しています…';
-
         apiPost({
-          action: 'finish',
-          logId:  currentWork.logId,
-          note:   el.note.value,
-          photos: uploaded,
-          photoFolderUrl: folderUrl
+          action: 'finish', logId: currentWork.logId, note: el.note.value,
+          photos: uploaded, photoFolderUrl: folderUrl
         }).then(function (res) {
           el.btnSaveFinish.disabled = false;
           el.saveProgress.className = '';
+          if (!res || !res.ok) { alert('記録できませんでした。' + ((res && res.message) || '')); return; }
 
-          if (!res || !res.ok) {
-            alert('記録できませんでした。' + ((res && res.message) || ''));
-            return;
-          }
-
-          // 所要時間はシートに記録されるが、画面には出さない（急かさないため）
           var msg = currentWork.zuban + ' の作業を記録しました。お疲れさまでした。';
           if (uploaded.length < photos.length) {
             msg += '　※ 写真 ' + (photos.length - uploaded.length) + ' 枚は保存できませんでした。';
           }
-
           currentWork = null;
           saveWork();
           renderWorkBar();
           el.finishPanel.className = 'panel';
           photos = [];
-          showStatus(msg.replace(/\n/g, '　'), 'info');
+          showMsg(msg, 'info');
+          refreshPendBadge();
         }).catch(function () {
           el.btnSaveFinish.disabled = false;
           el.saveProgress.className = '';
-          alert('通信に失敗しました。電波状況を確認してもう一度お試しください。');
+          alert('通信に失敗しました。もう一度お試しください。');
         });
       }
-
       next(0);
     };
 
     // ===================================================================
     // 検査（別工程・別担当）
-    //
-    // 生産が完了した行は「検査待ち」として残り、検査担当が後から
-    // 写真を見ながら可否を入れる。検査者と検査日時も別に記録される。
+    // 図面を見ながら判定するので、一覧から選ぶと図面が開く
     // ===================================================================
-    function setMode(mode) {
-      var inspect = (mode === 'inspect');
-      document.body.classList.toggle('inspect', inspect);
-      el.tabWork.className    = inspect ? '' : 'on';
-      el.tabInspect.className = inspect ? 'on' : '';
+    function setMode(m) {
+      mode = m;
+      var ins = (m === 'inspect');
+      el.tabWork.className = ins ? '' : 'on';
+      el.tabInspect.className = ins ? 'on' : '';
 
-      if (inspect) {
-        if (scanning) stopScan();
+      if (scanning) stopScan();
+      hideMsg();
+      el.suggest.className = '';
+      inspectItem = null;
+
+      if (ins) {
+        el.searchRow.className = 'hide';
+        el.infoBar.className = '';
+        el.workBar.className = '';
+        el.wbRemind.className = '';
+        showLayer('listLayer');
+        showBar('barScan');
+        el.barScan.className = 'bar';       // 検査の一覧では読み取りは使わない
         loadPending();
+      } else {
+        el.searchRow.className = '';
+        showLayer(pdfDoc ? 'pdfLayer' : 'emptyLayer');
+        showBar(pdfDoc ? 'barPdf' : 'barScan');
+        renderWorkBar();
       }
     }
 
-    el.tabWork.onclick    = function () { setMode('work'); };
+    el.tabWork.onclick = function () { setMode('work'); };
     el.tabInspect.onclick = function () { setMode('inspect'); };
 
     function loadPending() {
-      el.inspectPane.innerHTML = '<div class="pendEmpty">読み込んでいます…</div>';
-
-      fetch(API_URL + '?api=pending')
-        .then(function (r) { return r.json(); })
+      el.listLayer.innerHTML = '<div class="pendEmpty">読み込んでいます…</div>';
+      apiGet('?api=pending')
         .then(function (res) {
           var items = (res && res.ok && res.items) ? res.items : [];
           renderPending(items);
           updatePendBadge(items.length);
         })
         .catch(function () {
-          el.inspectPane.innerHTML =
-            '<div class="pendEmpty">読み込めませんでした。<br>通信環境を確認してください。</div>';
+          el.listLayer.innerHTML = '<div class="pendEmpty">読み込めませんでした。<br>通信環境を確認してください。</div>';
         });
     }
 
-    function updatePendBadge(n) {
-      el.pendBadge.textContent = n > 0 ? String(n) : '';
+    function updatePendBadge(n) { el.pendBadge.textContent = n > 0 ? String(n) : ''; }
+
+    function refreshPendBadge() {
+      apiGet('?api=pending')
+        .then(function (res) { updatePendBadge((res && res.ok && res.items) ? res.items.length : 0); })
+        .catch(function () {});
     }
 
     function renderPending(items) {
-      el.inspectPane.innerHTML = '';
-
+      el.listLayer.innerHTML = '';
       if (!items.length) {
-        el.inspectPane.innerHTML =
-          '<div class="pendEmpty">検査待ちはありません。<br>生産が完了するとここに並びます。</div>';
+        el.listLayer.innerHTML = '<div class="pendEmpty">検査待ちはありません。<br>生産が完了するとここに並びます。</div>';
         return;
       }
 
@@ -2169,134 +1556,146 @@
         var meta = document.createElement('div');
         meta.className = 'meta';
         meta.textContent = (it.name || '') + '　' + it.qty + '本　'
-                         + it.date + ' ' + it.endTime + '　製造: ' + it.worker;
+                         + it.date + ' ' + it.endTime + '　製造: ' + it.worker
+                         + '　写真' + (it.photoCount || 0) + '枚';
         card.appendChild(meta);
 
-        // 写真へのリンク。判断材料なので種類が分かるようにしておく
-        var links = String(it.photoLinks || '').split('\n').filter(function (s) { return s.trim(); });
-        if (links.length) {
-          var box = document.createElement('div');
-          box.className = 'photos';
-          links.forEach(function (line, i) {
+        var go = document.createElement('div');
+        go.className = 'go';
+        go.textContent = '図面を開いて検査する →';
+        card.appendChild(go);
+
+        card.onclick = function () { openInspection(it); };
+        el.listLayer.appendChild(card);
+      });
+    }
+
+    // 検査する行を開く。図番はもう分かっているので、そのまま図面を呼び出す。
+    function openInspection(item) {
+      inspectItem = item;
+
+      el.ibZuban.textContent = item.zuban;
+      el.ibName.textContent = (item.name || '') + '　' + item.qty + '本　製造: ' + item.worker;
+      el.infoBar.className = 'show';
+
+      showMsg('図面を読み込んでいます…', 'info');
+
+      apiGet('?api=search&z=' + encodeURIComponent(item.zuban))
+        .then(function (res) {
+          if (res && res.ok && res.pdf) {
+            showDrawing(res.pdf);
+            currentRow = (res.rows && res.rows[0]) || null;
+          } else {
+            showLayer('emptyLayer');
+            showMsg('この図番の図面が見つかりませんでした。写真で確認してください。', 'warn');
+          }
+          showBar('barJudge');       // 図面の下に必ず判定ボタンを出す
+        })
+        .catch(function () {
+          showLayer('emptyLayer');
+          showMsg('図面を読み込めませんでした。', 'err');
+          showBar('barJudge');
+        });
+    }
+
+    el.btnInsBack.onclick = function () { setMode('inspect'); };
+    el.btnInsOk.onclick = function () { submitInspection('OK'); };
+    el.btnInsNg.onclick = function () { submitInspection('NG'); };
+
+    function submitInspection(result) {
+      if (!inspectItem) return;
+      if (!currentWorker) { openWorkerPanel(''); return; }
+
+      var note = '';
+      if (result === 'NG') {
+        note = prompt('NG の内容を入力してください', '');
+        if (note === null) return;
+      }
+
+      el.btnInsOk.disabled = true;
+      el.btnInsNg.disabled = true;
+
+      apiPost({
+        action: 'inspect', logId: inspectItem.logId,
+        inspector: currentWorker, inspect: result, note: note
+      }).then(function (res) {
+        el.btnInsOk.disabled = false;
+        el.btnInsNg.disabled = false;
+        if (!res || !res.ok) { alert('記録できませんでした。' + ((res && res.message) || '')); return; }
+
+        var z = inspectItem.zuban;
+        setMode('inspect');
+        showMsg(z + ' を「' + result + '」で記録しました。', 'info');
+      }).catch(function () {
+        el.btnInsOk.disabled = false;
+        el.btnInsNg.disabled = false;
+        alert('通信に失敗しました。もう一度お試しください。');
+      });
+    }
+
+    // ===================================================================
+    // 図番の詳細（帯をタップすると開く）
+    // ===================================================================
+    el.infoBar.onclick = function () {
+      var r = currentRow;
+      el.dpZuban.textContent = r ? r.zuban : el.ibZuban.textContent;
+      el.dpName.textContent = r ? (r.name || '') : '';
+
+      var lines = [];
+      if (r) {
+        if (r.material) lines.push('材料　' + esc(r.material));
+        if (r.length) lines.push('長さ　' + esc(r.length));
+        if (r.model) lines.push('機種　' + esc(r.model));
+        if (r.qty) lines.push('数量　' + esc(r.qty));
+        if (r.parts) lines.push('部品点数　' + esc(r.parts));
+      }
+      el.dpBody.innerHTML = lines.join('<br>');
+
+      // 検査中なら、判断材料として写真のリンクも並べる
+      el.dpPhotos.innerHTML = '';
+      if (inspectItem && inspectItem.photoLinks) {
+        String(inspectItem.photoLinks).split('\n').filter(function (s) { return s.trim(); })
+          .forEach(function (line, i) {
             var slip = line.indexOf('[伝票]') === 0;
-            var url = line.replace(/^\[[^\]]*\]\s*/, '');
             var a = document.createElement('a');
-            a.href = url;
+            a.href = line.replace(/^\[[^\]]*\]\s*/, '');
             a.target = '_blank';
             a.rel = 'noopener';
             a.className = slip ? 'slip' : '';
             a.textContent = (slip ? '伝票' : '製品') + ' ' + (i + 1);
-            box.appendChild(a);
+            el.dpPhotos.appendChild(a);
           });
-          card.appendChild(box);
-        }
-
-        var row = document.createElement('div');
-        row.className = 'judge';
-
-        var ok = document.createElement('button');
-        ok.type = 'button';
-        ok.className = 'ghost ok';
-        ok.textContent = 'OK';
-        ok.onclick = function () { submitInspection(it, 'OK', card); };
-
-        var ng = document.createElement('button');
-        ng.type = 'button';
-        ng.className = 'ghost ng';
-        ng.textContent = 'NG';
-        ng.onclick = function () { submitInspection(it, 'NG', card); };
-
-        row.appendChild(ok);
-        row.appendChild(ng);
-        card.appendChild(row);
-
-        el.inspectPane.appendChild(card);
-      });
-    }
-
-    function submitInspection(item, judgeResult, card) {
-      if (!currentWorker) {
-        openWorkerPanel('');    // 検査者が未選択なら、その場で選ばせる
-        return;
       }
 
-      var note = '';
-      if (judgeResult === 'NG') {
-        note = prompt('NG の内容を入力してください（あとから追記もできます）', '');
-        if (note === null) return;    // 取り消し
-      }
+      el.detailPanel.className = 'panel show';
+    };
+    el.btnDetailClose.onclick = function () { el.detailPanel.className = 'panel'; };
 
-      var buttons = card.querySelectorAll('button');
-      for (var i = 0; i < buttons.length; i++) buttons[i].disabled = true;
-
-      apiPost({
-        action: 'inspect',
-        logId: item.logId,
-        inspector: currentWorker,
-        inspect: judgeResult,
-        note: note
-      }).then(function (res) {
-        if (!res || !res.ok) {
-          alert('記録できませんでした。' + ((res && res.message) || ''));
-          for (var i = 0; i < buttons.length; i++) buttons[i].disabled = false;
-          return;
-        }
-        card.parentNode.removeChild(card);
-
-        var left = el.inspectPane.querySelectorAll('.pendCard').length;
-        updatePendBadge(left);
-        if (!left) renderPending([]);
-      }).catch(function () {
-        alert('通信に失敗しました。もう一度お試しください。');
-        for (var i = 0; i < buttons.length; i++) buttons[i].disabled = false;
-      });
-    }
-
-    // 検査待ちの件数だけ先に取って、タブに出しておく
-    function refreshPendBadge() {
-      fetch(API_URL + '?api=pending')
-        .then(function (r) { return r.json(); })
-        .then(function (res) {
-          updatePendBadge((res && res.ok && res.items) ? res.items.length : 0);
-        })
-        .catch(function () {});
-    }
-
-    // ===== 操作の割り当て =====
+    // ===================================================================
+    // 操作の割り当てと起動
+    // ===================================================================
     el.btnSearch.onclick = function () { doSearch(el.q.value); };
-    el.btnScan.onclick   = startScan;
-    el.btnRescan.onclick = function () {
-      if (cameraBlocked) { el.camFile.click(); } else { startScan(); }
-    };
-    el.btnDrive.onclick  = function () {
-      if (currentPdf) window.open(currentPdf.viewUrl, '_blank');
-    };
+    el.btnScan.onclick = startScan;
 
-    el.camFile.onchange = function (e) {
-      var file = e.target.files && e.target.files[0];
-      decodePhoto(file);
-      e.target.value = '';   // 同じ写真を続けて撮れるようにする
-    };
-
-    // Enter で検索（ハンディバーコードリーダーにも対応）
     el.q.addEventListener('keydown', function (e) {
       if (e.key === 'Enter') { e.preventDefault(); doSearch(el.q.value); }
     });
 
-    // ===== 起動時 =====
-    renderHistory();
-    restoreWork();       // 先に復帰させる（作業中ならその作業者を引き継ぐため）
-    loadWorkers();       // 未着手なら、ここで作業者を選ばせる画面が出る
-    refreshPendBadge();  // 検査待ちの件数をタブに出す
+    // iPhone / iPad は iframe でなくても capture が効かないことがあるため、
+    // ファイル選択の形にしておく（label 経由で開く）
+    var isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) ||
+                (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (isIOS) el.camFile.removeAttribute('capture');
 
-    // URL に ?z=A5-0921 が付いていれば、その図面をすぐ開く
+    restoreWork();
+    loadWorkers();
+    refreshPendBadge();
+
     var m = location.search.match(/[?&]z=([^&]+)/);
     if (m) {
       var initial = decodeURIComponent(m[1].replace(/\+/g, ' '));
       el.q.value = initial;
       doSearch(initial);
-    } else {
-      el.q.focus();
     }
   })();
   </script>
