@@ -945,7 +945,9 @@
   </div>
 
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <!-- PDF.js は同じサイトに置く。
+       別サイトの worker は new Worker() で読み込めず、描画が始まらないため。 -->
+  <script src="lib/pdf.min.js"></script>
   <script>
   (function () {
     'use strict';
@@ -1221,11 +1223,10 @@
     var pdfDoc = null;
     var pdfPageNo = 1;
     var pdfScale = 1;
-    var pdfRendering = false;
+    var pdfTask = null;     // 進行中の描画。次の描画に入る前に取り消す
 
     if (window.pdfjsLib) {
-      pdfjsLib.GlobalWorkerOptions.workerSrc =
-        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
     }
 
     function showDrawing(pdfInfo) {
@@ -1288,8 +1289,15 @@
     }
 
     function renderPdfPage(fitWidth) {
-      if (!pdfDoc || pdfRendering) return;
-      pdfRendering = true;
+      if (!pdfDoc) return;
+
+      // 前の描画が残っていれば取り消す。
+      // 「描画中フラグ」で入口を塞ぐ作りにすると、描画が終わらなかったときに
+      // 二度と拡大できなくなるため、取り消して always 描き直す形にしている。
+      if (pdfTask) {
+        try { pdfTask.cancel(); } catch (e) {}
+        pdfTask = null;
+      }
 
       pdfDoc.getPage(pdfPageNo).then(function (page) {
         var base = page.getViewport({ scale: 1 });
@@ -1309,15 +1317,17 @@
         canvas.style.width  = Math.floor(vp.width / dpr) + 'px';
         canvas.style.height = Math.floor(vp.height / dpr) + 'px';
 
-        return page.render({
+        updatePdfLabels();   // 倍率の表示は描画の完了を待たずに更新する
+
+        pdfTask = page.render({
           canvasContext: canvas.getContext('2d'),
           viewport: vp
-        }).promise;
+        });
+        return pdfTask.promise;
       }).then(function () {
-        pdfRendering = false;
-        updatePdfLabels();
+        pdfTask = null;
       }).catch(function () {
-        pdfRendering = false;
+        pdfTask = null;      // 取り消し時もここに来る。次の描画は妨げない
       });
     }
 
@@ -1376,7 +1386,7 @@
 
     // 画面の向きが変わったら幅に合わせ直す
     window.addEventListener('resize', function () {
-      if (pdfDoc && !pdfRendering) renderPdfPage(true);
+      if (pdfDoc) renderPdfPage(true);
     });
 
     // ===== 図面を大きく見るための折りたたみ =====
