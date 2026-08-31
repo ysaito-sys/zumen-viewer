@@ -805,16 +805,17 @@
     // 画面の切り替え
     // プレビュー枠と操作バーは常に 1 つだけを表示する
     // ===================================================================
+    // className を丸ごと入れ替えると、要素が持っている他の指定
+    //（検査バーの二段組みなど）まで消えてしまう。表示の切り替えだけを触る。
     function showLayer(name) {
       ['camLayer','pdfLayer','frameLayer','listLayer','emptyLayer'].forEach(function (k) {
-        el[k].className = (k === name) ? 'layer show' : 'layer';
+        el[k].classList.toggle('show', k === name);
       });
-      if (name === 'pdfLayer') el.pdfLayer.className = 'layer show';
     }
 
     function showBar(name) {
       ['barScan','barCam','barPdf','barJudge'].forEach(function (k) {
-        el[k].className = (k === name) ? 'bar show' : 'bar';
+        el[k].classList.toggle('show', k === name);
       });
     }
 
@@ -1050,7 +1051,7 @@
       el.pdfLayer.addEventListener('pointerdown', function (e) {
         dragging = true; sx = e.clientX; sy = e.clientY;
         sl = el.pdfLayer.scrollLeft; st = el.pdfLayer.scrollTop;
-        el.pdfLayer.className = 'layer show dragging';
+        el.pdfLayer.classList.add('dragging');
       });
       el.pdfLayer.addEventListener('pointermove', function (e) {
         if (!dragging) return;
@@ -1060,7 +1061,7 @@
       function end() {
         if (!dragging) return;
         dragging = false;
-        el.pdfLayer.className = 'layer show';
+        el.pdfLayer.classList.remove('dragging');
       }
       el.pdfLayer.addEventListener('pointerup', end);
       el.pdfLayer.addEventListener('pointercancel', end);
@@ -1597,7 +1598,7 @@
         el.wbRemind.className = '';
         showLayer('listLayer');
         showBar('barScan');
-        el.barScan.className = 'bar';       // 検査の一覧では読み取りは使わない
+        el.barScan.classList.remove('show');   // 検査の一覧では読み取りは使わない
         loadPending();
       } else {
         el.searchRow.className = '';
