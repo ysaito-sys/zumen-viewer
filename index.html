@@ -1733,7 +1733,7 @@
       if (ins) {
         el.searchRow.className = 'hide';
         el.infoBar.className = '';
-        el.workBar.className = '';
+        el.workBar.classList.remove('show');   // paused の指定は残す
         el.wbRemind.className = '';
         showLayer('listLayer');
         showBar('barScan');
