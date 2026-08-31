@@ -4,6 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#0b5cab">
+  <!-- この版数は画面右上に出ます。古い版が動いていないか確認できます。
+       更新したら必ずここも変えてください。 -->
+  <meta name="app-version" content="2026-08-31-01">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>溶接図面ビューア</title>
   <style>
     /* ===================================================================
@@ -59,7 +65,8 @@
       align-items: center;
       justify-content: center;
       text-align: center;
-      -webkit-tap-highlight-color: transparent;
+      -webkit-tap-highlight-color: rgba(11,92,171,.18);  /* 押したことが見えるように */
+      touch-action: manipulation;                        /* タップ判定を遅らせない */
     }
     button:active, .btnlike:active { transform: translateY(1px); }
     button.ghost, .btnlike.ghost {
@@ -91,7 +98,26 @@
       justify-content: space-between;
       gap: 10px;
     }
-    header h1 { margin: 0; font-size: 15px; font-weight: 700; letter-spacing: .02em; }
+    header h1 {
+      margin: 0; font-size: 15px; font-weight: 700; letter-spacing: .02em;
+      -webkit-user-select: none; user-select: none;
+    }
+    #verTag { font-size: 10px; font-weight: 400; opacity: .7; margin-left: 8px; }
+
+    #diagBody {
+      margin: 10px 0 0;
+      padding: 12px;
+      background: #f1f4f7;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      font-family: ui-monospace, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 46dvh;
+      overflow-y: auto;
+    }
     #workerBtn {
       font-size: 14px;
       padding: 7px 12px;
@@ -279,8 +305,15 @@
     #pdfCanvas { display: block; margin: 8px auto; background: #fff; box-shadow: 0 2px 14px rgba(0,0,0,.35); }
     #pdfFrame { width: 100%; height: 100%; border: 0; }
 
-    /* 検査の一覧 */
-    #listLayer { overflow-y: auto; -webkit-overflow-scrolling: touch; background: var(--bg); padding: 12px; }
+    /* 検査の一覧
+       -webkit-overflow-scrolling: touch は、慣性スクロール中に
+       中のボタンのタップを取りこぼすことがあるため使わない。 */
+    #listLayer {
+      overflow-y: auto;
+      background: var(--bg);
+      padding: 12px;
+      touch-action: pan-y;
+    }
     /* カードは button で作る。
        iOS Safari は div へのタップを拾わないことがあるため。 */
     .pendCard {
@@ -304,8 +337,9 @@
       -webkit-appearance: none;
       appearance: none;
       cursor: pointer;
+      touch-action: manipulation;   /* タップ判定を遅らせない */
     }
-    .pendCard:active { background: #eef5fd; transform: none; }
+    .pendCard:active { background: #dce9f7; transform: none; }
     .pendCard .zb { font-size: 21px; font-weight: 800; letter-spacing: .02em; }
     .pendCard .meta { font-size: 13px; color: var(--muted); }
     .pendCard .go { align-self: flex-start; font-size: 13px; font-weight: 700; color: var(--accent); }
@@ -595,9 +629,22 @@
 
   <!-- ============ 上段 ============ -->
   <header>
-    <h1>溶接図面ビューア</h1>
+    <h1 id="appTitle">溶接図面ビューア<span id="verTag"></span></h1>
     <button type="button" id="workerBtn" class="unset">作業者を選ぶ</button>
   </header>
+
+  <!-- 動きがおかしい時の調べもの用。タイトルを3回続けてタップすると開く -->
+  <div class="panel" id="diagPanel">
+    <div class="sheetbox">
+      <h2>動作の確認</h2>
+      <div class="targetSub">うまく動かない時は、この内容を伝えてください。</div>
+      <pre id="diagBody"></pre>
+      <div class="row">
+        <button type="button" id="btnDiagReload">最新版を読み直す</button>
+        <button type="button" id="btnDiagClose" class="ghost">閉じる</button>
+      </div>
+    </div>
+  </div>
 
   <div class="modebar">
     <button type="button" id="tabWork" class="on">製造</button>
@@ -820,8 +867,62 @@
 
     var API_URL = 'https://script.google.com/macros/s/AKfycbyWwUYgqajwvYeOTNkA-SAm5vVO5fx8cYSaduGjZxUJ9fFtdd7dOEu4X7r39jC8nmcfLw/exec';
 
+    var APP_VERSION = (document.querySelector('meta[name="app-version"]') || {}).content || '(不明)';
+    var diagLog = [];
+
+    function note(text) {
+      var t = new Date();
+      var hh = ('0' + t.getHours()).slice(-2), mm = ('0' + t.getMinutes()).slice(-2), ss = ('0' + t.getSeconds()).slice(-2);
+      diagLog.push(hh + ':' + mm + ':' + ss + ' ' + text);
+      if (diagLog.length > 60) diagLog.shift();
+    }
+
+    // 握り潰していた不具合を後から追えるようにしておく
+    window.addEventListener('error', function (e) {
+      note('エラー: ' + (e.message || '') + ' @' + (e.filename || '').split('/').pop() + ':' + (e.lineno || ''));
+    });
+    window.addEventListener('unhandledrejection', function (e) {
+      note('未処理の失敗: ' + ((e.reason && e.reason.message) || e.reason || ''));
+    });
+
+    // ------------------------------------------------------------------
+    // iPad / iPhone でのタップ取りこぼし対策
+    //
+    // iOS はスクロールできる領域の中や、指がわずかに動いた時に
+    // click を発火させないことがある。touchend で位置のずれを見て、
+    // 動いていなければタップとみなして自分で click を起こす。
+    // ------------------------------------------------------------------
+    (function () {
+      var sx = 0, sy = 0, target = null;
+
+      document.addEventListener('touchstart', function (e) {
+        if (!e.touches || e.touches.length !== 1) { target = null; return; }
+        var t = e.touches[0];
+        sx = t.clientX; sy = t.clientY;
+        target = e.target && e.target.closest ? e.target.closest('button, .btnlike') : null;
+        if (target && target.disabled) target = null;
+      }, { passive: true });
+
+      document.addEventListener('touchend', function (e) {
+        if (!target) return;
+        var t = (e.changedTouches && e.changedTouches[0]) || null;
+        var moved = t ? (Math.abs(t.clientX - sx) > 12 || Math.abs(t.clientY - sy) > 12) : true;
+        var el2 = target;
+        target = null;
+        if (moved) return;                       // スクロール操作なので何もしない
+
+        // label は既定の動作（ファイル選択）に任せる。二重に開かないように。
+        if (el2.tagName === 'LABEL') return;
+
+        e.preventDefault();                      // 続けて起きる click を止める
+        note('タップ: ' + (el2.id || el2.className || el2.tagName));
+        el2.click();
+      }, { passive: false });
+    })();
+
     var el = {};
     ['workerBtn','tabWork','tabInspect','pendBadge','workBar','wbZuban','wbSub','btnFinish','wbRemind',
+     'appTitle','verTag','diagPanel','diagBody','btnDiagReload','btnDiagClose',
      'btnPause','pausePanel','paTarget','pauseReasons','btnPauseCancel',
      'searchRow','q','btnSearch','infoBar','ibZuban','ibName','btnDetail',
      'stage','camLayer','pdfLayer','pdfCanvas','frameLayer','pdfFrame','listLayer','emptyLayer','msg','suggest',
@@ -2036,6 +2137,82 @@
     el.btnDetailClose.onclick = function () { el.detailPanel.className = 'panel'; };
 
     // ===================================================================
+    // 動作の確認（うまく動かない時に状況を見るため）
+    // タイトルを 3 回続けてタップすると開く
+    // ===================================================================
+    (function () {
+      var taps = 0, timer = null;
+      el.appTitle.addEventListener('click', function () {
+        taps++;
+        clearTimeout(timer);
+        timer = setTimeout(function () { taps = 0; }, 1200);
+        if (taps >= 3) { taps = 0; openDiag(); }
+      });
+    })();
+
+    function openDiag() {
+      var lines = [
+        '版数        : ' + APP_VERSION,
+        '開いている  : ' + location.href,
+        '端末        : ' + navigator.userAgent,
+        '画面        : ' + window.innerWidth + ' x ' + window.innerHeight,
+        'タッチ点数  : ' + (navigator.maxTouchPoints || 0),
+        'PDF描画     : ' + (window.pdfjsLib ? 'あり' : 'なし'),
+        'QR読取      : ' + (typeof Html5Qrcode !== 'undefined' ? 'あり' : 'なし'),
+        '作業者      : ' + (currentWorker || '(未選択)'),
+        'モード      : ' + mode,
+        '検査カード数: ' + document.querySelectorAll('.pendCard').length,
+        '検査待ち件数: ' + (el.pendBadge.textContent || '0'),
+        '',
+        '--- 直近の動き ---'
+      ].concat(diagLog.slice(-25));
+
+      el.diagBody.textContent = lines.join('\n');
+      el.diagPanel.className = 'panel show';
+
+      // 配信側の版数と食い違っていないか確かめる
+      fetch('index.html?_=' + new Date().getTime(), { cache: 'no-store' })
+        .then(function (r) { return r.text(); })
+        .then(function (t) {
+          var m2 = t.match(/name="app-version"\s+content="([^"]+)"/);
+          var latest = m2 ? m2[1] : '(取得できず)';
+          el.diagBody.textContent += '\n\n配信側の版数: ' + latest
+            + (latest !== APP_VERSION
+                ? '\n★ 古い版が表示されています。下の「最新版を読み直す」を押してください。'
+                : '\n（最新版です）');
+        })
+        .catch(function () {
+          el.diagBody.textContent += '\n\n配信側の版数: 確認できませんでした（通信不可）';
+        });
+    }
+
+    el.btnDiagClose.onclick = function () { el.diagPanel.className = 'panel'; };
+    el.btnDiagReload.onclick = function () {
+      location.replace(location.pathname + '?v=' + new Date().getTime());
+    };
+
+    // 起動時にも版数を照らし合わせ、古ければ一度だけ自動で読み直す。
+    // 現場で古い画面が動き続けるのを防ぐための仕掛け。
+    function checkVersion() {
+      fetch('index.html?_=' + new Date().getTime(), { cache: 'no-store' })
+        .then(function (r) { return r.text(); })
+        .then(function (t) {
+          var m2 = t.match(/name="app-version"\s+content="([^"]+)"/);
+          if (!m2 || m2[1] === APP_VERSION) { note('版数は最新'); return; }
+
+          var once = 'zumen_reloaded_' + m2[1];
+          try {
+            if (sessionStorage.getItem(once)) return;   // 繰り返さないための保険
+            sessionStorage.setItem(once, '1');
+          } catch (e) { return; }
+
+          note('古い版のため読み直します → ' + m2[1]);
+          location.replace(location.pathname + '?v=' + m2[1]);
+        })
+        .catch(function () {});
+    }
+
+    // ===================================================================
     // 操作の割り当てと起動
     // ===================================================================
     el.btnSearch.onclick = function () { doSearch(el.q.value); };
@@ -2051,6 +2228,10 @@
                 (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     if (isIOS) el.camFile.removeAttribute('capture');
 
+    el.verTag.textContent = APP_VERSION;
+    note('起動 ' + APP_VERSION);
+
+    checkVersion();
     restoreWork();
     loadWorkers();
     refreshPendBadge();
