@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0b5cab">
   <!-- この版数は画面右上に出ます。古い版が動いていないか確認できます。
        更新したら必ずここも変えてください。 -->
-  <meta name="app-version" content="2026-08-31-02">
+  <meta name="app-version" content="2026-08-31-03">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -345,12 +345,17 @@
     .pendCard .go { align-self: flex-start; font-size: 13px; font-weight: 700; color: var(--accent); }
     .pendEmpty { padding: 44px 20px; text-align: center; color: #cfd4da; font-size: 15px; line-height: 1.9; }
 
-    /* 何も出ていない時の案内 */
-    #emptyLayer {
+    /* 何も出ていない時の案内。
+       display は .layer / .layer.show 側に任せる。
+       ここで display:flex を書くと ID の方が強く、隠れなくなって
+       透明なまま画面を覆い、下のボタンのタップを奪ってしまう。 */
+    #emptyLayer.show {
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
+    }
+    #emptyLayer {
       gap: 10px;
       color: #cfd4da;
       text-align: center;
