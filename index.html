@@ -378,11 +378,25 @@
     .pageGroup { display: none; align-items: center; gap: 6px; }
     .pageGroup.show { display: flex; }
 
-    /* 検査の判定 */
-    #barJudge button { flex: 1 1 0; min-height: 60px; font-size: 19px; }
+    /* 検査の判定（二段） */
+    .bar.barTwo { flex-direction: column; gap: 7px; align-items: stretch; }
+    .bar.barTwo .line { display: flex; align-items: center; gap: 7px; width: 100%; }
+    #barJudge .line:first-child button { min-width: 52px; min-height: 50px; font-size: 20px; flex: none; }
+    #barJudge .line:first-child button.lbl { font-size: 14px; min-width: 0; padding: 8px 14px; }
+    #insZoomLabel {
+      flex: none; min-width: 54px; text-align: center;
+      font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums;
+    }
+    #barJudge .line:last-child button { flex: 1 1 0; min-height: 58px; font-size: 19px; }
     #barJudge .ok { background: var(--ok); }
     #barJudge .ng { background: var(--err); }
-    #barJudge .back { flex: none; min-width: 74px; }
+    #barJudge .back { flex: none !important; min-width: 78px; }
+    #btnInsPhotos .cnt {
+      margin-left: 6px; font-size: 12px; font-weight: 700;
+      background: var(--accent); color: #fff;
+      border-radius: 999px; padding: 2px 8px;
+    }
+    #btnInsPhotos .cnt:empty { display: none; }
 
     /* ===================================================================
        画面の上に重ねるパネル（作業者・着手・完了）
@@ -481,6 +495,39 @@
       border: 1px solid var(--line); color: var(--accent); text-decoration: none;
     }
     .photoLinks a.slip { color: var(--warn); border-color: var(--warn); }
+
+    /* 製造時の写真（検査で確認する）。画像が出せない時はボタン表示に落ちる */
+    #ppMade { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    #ppMade .made {
+      display: block;
+      width: 96px;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      text-decoration: none;
+      background: #fff;
+    }
+    #ppMade .made img { width: 100%; height: 96px; object-fit: cover; display: block; background: #eee; }
+    #ppMade .made .cap {
+      display: block; padding: 5px 0; text-align: center;
+      font-size: 12px; font-weight: 700; color: #fff; background: var(--accent);
+    }
+    #ppMade .made.slip .cap { background: var(--warn); }
+    #ppMade .made.insp .cap { background: var(--ok); }
+    #ppMade .none { font-size: 14px; color: var(--muted); padding: 6px 0; }
+    #ppNew { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    #ppNew .thumb {
+      position: relative; width: 82px; height: 82px;
+      border-radius: 8px; overflow: hidden;
+      border: 1px solid var(--line); background: #eee;
+    }
+    #ppNew .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    #ppNew .thumb .del {
+      position: absolute; top: 2px; right: 2px;
+      width: 26px; height: 26px; min-height: 26px; padding: 0;
+      border-radius: 50%; background: rgba(0,0,0,.6);
+      color: #fff; font-size: 15px; line-height: 1;
+    }
 
     /* ---- タブレット ---- */
     @media (min-width: 768px) {
@@ -597,10 +644,21 @@
       <button type="button" id="btnBackScan" class="ghost lbl">読取</button>
     </div>
 
-    <div class="bar" id="barJudge">
-      <button type="button" id="btnInsBack" class="ghost back">戻る</button>
-      <button type="button" id="btnInsOk" class="ok">OK</button>
-      <button type="button" id="btnInsNg" class="ng">NG</button>
+    <!-- 検査中は図面を拡大しながら判定するので、二段にして両方を出す -->
+    <div class="bar barTwo" id="barJudge">
+      <div class="line">
+        <button type="button" id="insZoomOut" class="ghost" aria-label="縮小">−</button>
+        <span id="insZoomLabel">100%</span>
+        <button type="button" id="insZoomIn" class="ghost" aria-label="拡大">＋</button>
+        <button type="button" id="insFit" class="ghost lbl">幅</button>
+        <div class="grow"></div>
+        <button type="button" id="btnInsPhotos" class="ghost lbl">写真<span class="cnt" id="insPhotoCnt"></span></button>
+      </div>
+      <div class="line">
+        <button type="button" id="btnInsBack" class="ghost back">戻る</button>
+        <button type="button" id="btnInsOk" class="ok">OK</button>
+        <button type="button" id="btnInsNg" class="ng">NG</button>
+      </div>
     </div>
   </div>
 
@@ -669,6 +727,29 @@
     </div>
   </div>
 
+  <!-- 検査で使う写真パネル。作った時の写真を見て、必要なら検査写真を足す -->
+  <div class="panel" id="photoPanel">
+    <div class="sheetbox">
+      <h2>写真</h2>
+      <div class="targetSub" id="ppTarget"></div>
+
+      <label class="fieldLabel">製造時に撮った写真</label>
+      <div id="ppMade"></div>
+
+      <label class="fieldLabel">検査で追加する写真</label>
+      <button type="button" id="btnAddInspectPhoto" class="ghost" style="width:100%">写真を撮る</button>
+      <input type="file" id="inspectPhotoFile" accept="image/*" capture="environment" class="visually-hidden">
+      <div id="ppNew"></div>
+
+      <div class="row">
+        <button type="button" id="btnPhotoClose" class="ghost">閉じる</button>
+      </div>
+      <div class="hint">
+        追加した写真は「OK」または「NG」を押したときに、この柱の記録へ一緒に保存されます。
+      </div>
+    </div>
+  </div>
+
   <div class="panel" id="detailPanel">
     <div class="sheetbox">
       <h2 id="dpTitle">図番の詳細</h2>
@@ -697,7 +778,9 @@
      'stage','camLayer','pdfLayer','pdfCanvas','frameLayer','pdfFrame','listLayer','emptyLayer','msg','suggest',
      'barScan','btnScan','camFile','barCam','btnStopScan','btnTorch','zoom','zoomLabel',
      'barPdf','zoomOut','pdfZoomLabel','zoomIn','fitWidth','pageGroup','pagePrev','pageInfo','pageNext','btnBackScan',
-     'barJudge','btnInsBack','btnInsOk','btnInsNg',
+     'barJudge','insZoomOut','insZoomLabel','insZoomIn','insFit','btnInsPhotos','insPhotoCnt',
+     'btnInsBack','btnInsOk','btnInsNg',
+     'photoPanel','ppTarget','ppMade','btnAddInspectPhoto','inspectPhotoFile','ppNew','btnPhotoClose',
      'workerPanel','workerList','workerEmpty','btnWorkerLater',
      'startPanel','spZuban','spName','spQtyHint','qtyMinus','qtyValue','qtyPlus','btnStart','btnViewOnly',
      'finishPanel','fpZuban','fpSub','btnAddProduct','btnAddSlip','photoFile','photoList','note',
@@ -855,10 +938,13 @@
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
     }
 
-    function showDrawing(info) {
+    // barAfter … 読み込み後に出す操作バー。
+    // 検査中は判定ボタンを消したくないので、呼び出し側が指定できるようにしている。
+    function showDrawing(info, barAfter) {
       currentPdf = info;
+      var bar = barAfter || 'barPdf';
 
-      if (!window.pdfjsLib) { useDriveViewer(info); return; }
+      if (!window.pdfjsLib) { useDriveViewer(info, bar); return; }
       showMsg('図面を読み込んでいます…', 'info');
 
       apiGet('?api=pdf&id=' + encodeURIComponent(info.id))
@@ -873,19 +959,20 @@
           pdfDoc = doc;
           pdfPageNo = 1;
           showLayer('pdfLayer');
-          showBar('barPdf');
+          showBar(bar);
           el.pageGroup.className = doc.numPages > 1 ? 'pageGroup show' : 'pageGroup';
           hideMsg();
           renderPdfPage(true);
         })
-        .catch(function () { useDriveViewer(info); });
+        .catch(function () { useDriveViewer(info, bar); });
     }
 
-    function useDriveViewer(info) {
+    function useDriveViewer(info, barAfter) {
       pdfDoc = null;
       el.pdfFrame.src = info.previewUrl;
       showLayer('frameLayer');
-      showBar('barScan');
+      // 自前描画に失敗した時は拡大ボタンが効かないので、図面用のバーは出さない
+      showBar(barAfter === 'barJudge' ? 'barJudge' : 'barScan');
       hideMsg();
     }
 
@@ -929,7 +1016,9 @@
     }
 
     function updatePdfLabels() {
-      el.pdfZoomLabel.textContent = Math.round(pdfScale * 100) + '%';
+      var pct = Math.round(pdfScale * 100) + '%';
+      el.pdfZoomLabel.textContent = pct;
+      el.insZoomLabel.textContent = pct;     // 検査バーにも同じ倍率を出す
       if (pdfDoc) el.pageInfo.textContent = pdfPageNo + '/' + pdfDoc.numPages;
     }
 
@@ -942,6 +1031,11 @@
     el.zoomIn.onclick = function () { zoomBy(1.25); };
     el.zoomOut.onclick = function () { zoomBy(0.8); };
     el.fitWidth.onclick = function () { renderPdfPage(true); };
+
+    // 検査バーからも同じ操作ができるようにする
+    el.insZoomIn.onclick = function () { zoomBy(1.25); };
+    el.insZoomOut.onclick = function () { zoomBy(0.8); };
+    el.insFit.onclick = function () { renderPdfPage(true); };
     el.pagePrev.onclick = function () { if (pdfDoc && pdfPageNo > 1) { pdfPageNo--; renderPdfPage(false); } };
     el.pageNext.onclick = function () { if (pdfDoc && pdfPageNo < pdfDoc.numPages) { pdfPageNo++; renderPdfPage(false); } };
     el.btnBackScan.onclick = function () {
@@ -1573,29 +1667,128 @@
     // 検査する行を開く。図番はもう分かっているので、そのまま図面を呼び出す。
     function openInspection(item) {
       inspectItem = item;
+      inspectPhotos = [];
+      updateInsPhotoCount();
 
       el.ibZuban.textContent = item.zuban;
       el.ibName.textContent = (item.name || '') + '　' + item.qty + '本　製造: ' + item.worker;
       el.infoBar.className = 'show';
 
+      showBar('barJudge');          // 先に判定ボタンを出しておく
       showMsg('図面を読み込んでいます…', 'info');
 
       apiGet('?api=search&z=' + encodeURIComponent(item.zuban))
         .then(function (res) {
           if (res && res.ok && res.pdf) {
-            showDrawing(res.pdf);
             currentRow = (res.rows && res.rows[0]) || null;
+            // 読み込み後も判定バーを保つ（図面用に切り替わらないようにする）
+            showDrawing(res.pdf, 'barJudge');
           } else {
             showLayer('emptyLayer');
+            showBar('barJudge');
             showMsg('この図番の図面が見つかりませんでした。写真で確認してください。', 'warn');
           }
-          showBar('barJudge');       // 図面の下に必ず判定ボタンを出す
         })
         .catch(function () {
           showLayer('emptyLayer');
-          showMsg('図面を読み込めませんでした。', 'err');
           showBar('barJudge');
+          showMsg('図面を読み込めませんでした。', 'err');
         });
+    }
+
+    // ---- 検査で使う写真 ----
+    var inspectPhotos = [];
+
+    function updateInsPhotoCount() {
+      el.insPhotoCnt.textContent = inspectPhotos.length ? String(inspectPhotos.length) : '';
+    }
+
+    el.btnInsPhotos.onclick = function () {
+      if (!inspectItem) return;
+      el.ppTarget.textContent = inspectItem.zuban + '　' + (inspectItem.name || '')
+                              + '　製造: ' + inspectItem.worker;
+      renderMadePhotos();
+      renderInspectPhotos();
+      el.photoPanel.className = 'panel show';
+    };
+    el.btnPhotoClose.onclick = function () { el.photoPanel.className = 'panel'; };
+
+    // 製造時に撮られた写真を並べる。
+    // ドライブのサムネイルを試し、出せなければリンクのボタンに切り替える。
+    function renderMadePhotos() {
+      el.ppMade.innerHTML = '';
+      var raw = String((inspectItem && inspectItem.photoLinks) || '');
+      var lines = raw.split('\n').filter(function (s) { return s.trim(); });
+
+      if (!lines.length) {
+        el.ppMade.innerHTML = '<div class="none">製造時の写真はありません。</div>';
+        return;
+      }
+
+      lines.forEach(function (line, i) {
+        var isSlip = line.indexOf('[伝票]') === 0;
+        var isInsp = line.indexOf('[検査]') === 0;
+        var url = line.replace(/^\[[^\]]*\]\s*/, '');
+        var idm = url.match(/\/d\/([^/]+)/);
+
+        var a = document.createElement('a');
+        a.className = 'made' + (isSlip ? ' slip' : (isInsp ? ' insp' : ''));
+        a.href = url;
+        a.target = '_blank';
+        a.rel = 'noopener';
+
+        if (idm) {
+          var img = document.createElement('img');
+          img.src = 'https://drive.google.com/thumbnail?id=' + idm[1] + '&sz=w300';
+          img.alt = '';
+          img.onerror = function () { img.style.display = 'none'; };
+          a.appendChild(img);
+        }
+
+        var cap = document.createElement('span');
+        cap.className = 'cap';
+        cap.textContent = (isSlip ? '伝票' : (isInsp ? '検査' : '製品')) + ' ' + (i + 1);
+        a.appendChild(cap);
+
+        el.ppMade.appendChild(a);
+      });
+    }
+
+    el.btnAddInspectPhoto.onclick = function () { el.inspectPhotoFile.click(); };
+
+    el.inspectPhotoFile.onchange = function (e) {
+      var f = e.target.files && e.target.files[0];
+      e.target.value = '';
+      if (!f) return;
+
+      shrinkImage(f, 1600, 0.75).then(function (dataUrl) {
+        inspectPhotos.push({ dataUrl: dataUrl });
+        renderInspectPhotos();
+        updateInsPhotoCount();
+      }).catch(function () { alert('写真を読み込めませんでした。'); });
+    };
+
+    function renderInspectPhotos() {
+      el.ppNew.innerHTML = '';
+      inspectPhotos.forEach(function (p, i) {
+        var box = document.createElement('div');
+        box.className = 'thumb';
+
+        var im = document.createElement('img');
+        im.src = p.dataUrl;
+        box.appendChild(im);
+
+        var del = document.createElement('button');
+        del.className = 'del'; del.type = 'button'; del.textContent = '×';
+        del.onclick = function () {
+          inspectPhotos.splice(i, 1);
+          renderInspectPhotos();
+          updateInsPhotoCount();
+        };
+        box.appendChild(del);
+
+        el.ppNew.appendChild(box);
+      });
     }
 
     el.btnInsBack.onclick = function () { setMode('inspect'); };
@@ -1615,22 +1808,52 @@
       el.btnInsOk.disabled = true;
       el.btnInsNg.disabled = true;
 
-      apiPost({
-        action: 'inspect', logId: inspectItem.logId,
-        inspector: currentWorker, inspect: result, note: note
-      }).then(function (res) {
-        el.btnInsOk.disabled = false;
-        el.btnInsNg.disabled = false;
-        if (!res || !res.ok) { alert('記録できませんでした。' + ((res && res.message) || '')); return; }
+      var uploaded = [];
 
-        var z = inspectItem.zuban;
-        setMode('inspect');
-        showMsg(z + ' を「' + result + '」で記録しました。', 'info');
-      }).catch(function () {
-        el.btnInsOk.disabled = false;
-        el.btnInsNg.disabled = false;
-        alert('通信に失敗しました。もう一度お試しください。');
-      });
+      // 検査で撮った写真を先に保存してから、判定を記録する
+      function sendPhoto(i) {
+        if (i >= inspectPhotos.length) { finish(); return; }
+        showMsg('検査写真を保存しています… (' + (i + 1) + '/' + inspectPhotos.length + ')', 'info');
+
+        apiPost({
+          action: 'photo', logId: inspectItem.logId, zuban: inspectItem.zuban,
+          worker: currentWorker, index: i + 1, kind: 'inspect', dataUrl: inspectPhotos[i].dataUrl
+        }).then(function (res) {
+          if (res && res.ok) uploaded.push({ url: res.url, name: res.name, kind: 'inspect' });
+          sendPhoto(i + 1);
+        }).catch(function () { sendPhoto(i + 1); });   // 1 枚失敗しても続ける
+      }
+
+      function finish() {
+        showMsg('記録しています…', 'info');
+
+        apiPost({
+          action: 'inspect', logId: inspectItem.logId,
+          inspector: currentWorker, inspect: result, note: note, photos: uploaded
+        }).then(function (res) {
+          el.btnInsOk.disabled = false;
+          el.btnInsNg.disabled = false;
+          if (!res || !res.ok) { alert('記録できませんでした。' + ((res && res.message) || '')); return; }
+
+          var z = inspectItem.zuban;
+          var msg = z + ' を「' + result + '」で記録しました。';
+          if (uploaded.length) msg += '　検査写真 ' + uploaded.length + ' 枚を保存しました。';
+          if (uploaded.length < inspectPhotos.length) {
+            msg += '　※ ' + (inspectPhotos.length - uploaded.length) + ' 枚は保存できませんでした。';
+          }
+
+          inspectPhotos = [];
+          updateInsPhotoCount();
+          setMode('inspect');
+          showMsg(msg, 'info');
+        }).catch(function () {
+          el.btnInsOk.disabled = false;
+          el.btnInsNg.disabled = false;
+          alert('通信に失敗しました。もう一度お試しください。');
+        });
+      }
+
+      sendPhoto(0);
     }
 
     // ===================================================================
