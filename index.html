@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0b5cab">
   <!-- この版数は画面右上に出ます。古い版が動いていないか確認できます。
        更新したら必ずここも変えてください。 -->
-  <meta name="app-version" content="2026-08-31-01">
+  <meta name="app-version" content="2026-08-31-02">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -893,31 +893,41 @@
     // 動いていなければタップとみなして自分で click を起こす。
     // ------------------------------------------------------------------
     (function () {
-      var sx = 0, sy = 0, target = null;
+      var sx = 0, sy = 0, target = null, clicked = false;
+
+      // 通常どおり click が起きたかを見張る。起きていれば手出ししない。
+      document.addEventListener('click', function () { clicked = true; }, true);
 
       document.addEventListener('touchstart', function (e) {
+        clicked = false;
         if (!e.touches || e.touches.length !== 1) { target = null; return; }
         var t = e.touches[0];
         sx = t.clientX; sy = t.clientY;
-        target = e.target && e.target.closest ? e.target.closest('button, .btnlike') : null;
+        target = (e.target && e.target.closest) ? e.target.closest('button, .btnlike') : null;
         if (target && target.disabled) target = null;
       }, { passive: true });
 
       document.addEventListener('touchend', function (e) {
         if (!target) return;
+
         var t = (e.changedTouches && e.changedTouches[0]) || null;
         var moved = t ? (Math.abs(t.clientX - sx) > 12 || Math.abs(t.clientY - sy) > 12) : true;
         var el2 = target;
         target = null;
-        if (moved) return;                       // スクロール操作なので何もしない
+        if (moved) return;                    // 指が動いていればスクロール操作
 
-        // label は既定の動作（ファイル選択）に任せる。二重に開かないように。
+        // ファイル選択は既定の動きに任せる（二重に開かないため）
         if (el2.tagName === 'LABEL') return;
 
-        e.preventDefault();                      // 続けて起きる click を止める
-        note('タップ: ' + (el2.id || el2.className || el2.tagName));
-        el2.click();
-      }, { passive: false });
+        // preventDefault は使わない。
+        // 止めてしまうと、補いに失敗した時に完全に無反応になるため。
+        // 少し待って click が来なければ、その時だけ自分で起こす。
+        setTimeout(function () {
+          if (clicked) return;
+          note('clickが来ないので補完: ' + (el2.id || el2.className || el2.tagName));
+          el2.click();
+        }, 350);
+      }, { passive: true });
     })();
 
     var el = {};
@@ -967,6 +977,19 @@
       ['barScan','barCam','barPdf','barJudge'].forEach(function (k) {
         el[k].classList.toggle('show', k === name);
       });
+    }
+
+    // 重ねて出すパネルの一覧。開けっ放しは画面全体を覆ってタップを遮るので、
+    // 場面が変わるときは必ず全部閉じる。
+    var PANELS = ['workerPanel','startPanel','finishPanel','photoPanel',
+                  'detailPanel','pausePanel','diagPanel'];
+
+    function closeAllPanels() {
+      PANELS.forEach(function (k) { if (el[k]) el[k].className = 'panel'; });
+    }
+
+    function openPanels() {
+      return PANELS.filter(function (k) { return el[k] && el[k].classList.contains('show'); });
     }
 
     function showMsg(text, kind) {
@@ -1830,6 +1853,7 @@
       hideMsg();
       el.suggest.className = '';
       inspectItem = null;
+      closeAllPanels();     // 開いたままのパネルがタップを遮らないようにする
 
       if (ins) {
         el.searchRow.className = 'hide';
@@ -2163,6 +2187,7 @@
         'モード      : ' + mode,
         '検査カード数: ' + document.querySelectorAll('.pendCard').length,
         '検査待ち件数: ' + (el.pendBadge.textContent || '0'),
+        '開いている窓: ' + (openPanels().filter(function (k) { return k !== 'diagPanel'; }).join(', ') || 'なし'),
         '',
         '--- 直近の動き ---'
       ].concat(diagLog.slice(-25));
@@ -2227,6 +2252,18 @@
     var isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) ||
                 (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     if (isIOS) el.camFile.removeAttribute('capture');
+
+    // パネルの外側（暗い部分）をタップしても閉じられるようにする。
+    // 閉じ方が分からずに操作不能になる、という事態を防ぐための保険。
+    PANELS.forEach(function (k) {
+      if (!el[k]) return;
+      el[k].addEventListener('click', function (e) {
+        if (e.target === el[k]) {
+          note('背景タップで ' + k + ' を閉じました');
+          el[k].className = 'panel';
+        }
+      });
+    });
 
     el.verTag.textContent = APP_VERSION;
     note('起動 ' + APP_VERSION);
