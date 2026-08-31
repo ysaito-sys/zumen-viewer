@@ -160,9 +160,22 @@
       background: #fff;
       color: var(--ok);
       min-height: 46px;
-      padding: 10px 18px;
+      padding: 10px 16px;
       font-size: 16px;
     }
+    #workBar button.pause {
+      background: rgba(255,255,255,.18);
+      color: #fff;
+      border: 2px solid rgba(255,255,255,.75);
+    }
+
+    /* 中断している間は帯の色を変えて、止まっていることが一目で分かるようにする */
+    #workBar.paused { background: var(--warn); }
+    #workBar.paused button { color: var(--warn); }
+    #workBar.paused button.pause { color: #fff; }
+
+    #pauseReasons { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+    #pauseReasons button { width: 100%; min-height: 58px; font-size: 18px; }
     #wbRemind {
       flex: none;
       display: none;
@@ -596,9 +609,27 @@
       <div class="zb" id="wbZuban"></div>
       <div class="sub" id="wbSub"></div>
     </div>
+    <button type="button" id="btnPause" class="pause">中断</button>
     <button type="button" id="btnFinish">完了</button>
   </div>
   <div id="wbRemind"></div>
+
+  <!-- 中断の理由を選ぶ。工数の内訳として残る -->
+  <div class="panel" id="pausePanel">
+    <div class="sheetbox">
+      <h2>作業を中断します</h2>
+      <div class="targetSub" id="paTarget"></div>
+      <div class="stepLabel">止まっている理由を選んでください</div>
+      <div id="pauseReasons"></div>
+      <div class="row">
+        <button type="button" id="btnPauseCancel" class="ghost">やめる</button>
+      </div>
+      <div class="hint">
+        中断している間の時間は工数から差し引かれます。<br>
+        材料待ちや機械トラブルがどれだけあるかも、あとから分かるようになります。
+      </div>
+    </div>
+  </div>
 
   <div id="searchRow">
     <input id="q" type="text" inputmode="latin" autocomplete="off" autocapitalize="characters"
@@ -791,6 +822,7 @@
 
     var el = {};
     ['workerBtn','tabWork','tabInspect','pendBadge','workBar','wbZuban','wbSub','btnFinish','wbRemind',
+     'btnPause','pausePanel','paTarget','pauseReasons','btnPauseCancel',
      'searchRow','q','btnSearch','infoBar','ibZuban','ibName','btnDetail',
      'stage','camLayer','pdfLayer','pdfCanvas','frameLayer','pdfFrame','listLayer','emptyLayer','msg','suggest',
      'barScan','btnScan','camFile','barCam','btnStopScan','btnTorch','zoom','zoomLabel',
@@ -1429,21 +1461,104 @@
         if (raw) currentWork = JSON.parse(raw);
       } catch (e) { currentWork = null; }
       renderWorkBar();
+
+      // 中断したかどうかは端末をまたぐことがあるので、サーバー側の状態に合わせる
+      if (currentWork) {
+        apiGet('?api=openwork').then(function (res) {
+          if (!res || !res.ok || !res.items) return;
+          for (var i = 0; i < res.items.length; i++) {
+            if (res.items[i].logId === currentWork.logId) {
+              currentWork.paused = !!res.items[i].paused;
+              saveWork();
+              renderWorkBar();
+              return;
+            }
+          }
+          // サーバー側に無い＝別の端末で完了済み
+          currentWork = null;
+          saveWork();
+          renderWorkBar();
+        }).catch(function () {});
+      }
     }
 
     function renderWorkBar() {
       if (!currentWork || mode !== 'work') {
-        el.workBar.className = '';
+        el.workBar.classList.remove('show');
         el.wbRemind.className = '';
         if (remindTimer) { clearInterval(remindTimer); remindTimer = null; }
         return;
       }
+
+      var paused = !!currentWork.paused;
+
       el.wbZuban.textContent = currentWork.zuban;
-      el.wbSub.textContent = (currentWork.name || '') + '　' + currentWork.qty + '本　' + currentWork.worker;
-      el.workBar.className = 'show';
+      el.wbSub.textContent = paused
+        ? '中断中' + (currentWork.pauseReason ? '（' + currentWork.pauseReason + '）' : '')
+        : (currentWork.name || '') + '　' + currentWork.qty + '本　' + currentWork.worker;
+
+      el.btnPause.textContent = paused ? '再開' : '中断';
+      el.workBar.classList.toggle('paused', paused);
+      el.workBar.classList.add('show');
 
       checkForgotten();
       if (!remindTimer) remindTimer = setInterval(checkForgotten, 60000);
+    }
+
+    // ---- 中断・再開 ----
+    var PAUSE_REASONS = ['材料待ち', '機械トラブル', '他の作業', '打合せ', 'その他'];
+
+    el.btnPause.onclick = function () {
+      if (!currentWork) return;
+      if (currentWork.paused) { doResume(); return; }
+
+      el.paTarget.textContent = currentWork.zuban + '　' + (currentWork.name || '');
+      el.pauseReasons.innerHTML = '';
+
+      PAUSE_REASONS.forEach(function (r) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'ghost';
+        b.textContent = r;
+        b.onclick = function () { doPause(r); };
+        el.pauseReasons.appendChild(b);
+      });
+
+      el.pausePanel.className = 'panel show';
+    };
+
+    el.btnPauseCancel.onclick = function () { el.pausePanel.className = 'panel'; };
+
+    function doPause(reason) {
+      el.pausePanel.className = 'panel';
+      showMsg('中断を記録しています…', 'info');
+
+      apiPost({ action: 'pause', logId: currentWork.logId, reason: reason })
+        .then(function (res) {
+          if (!res || !res.ok) { showMsg('中断を記録できませんでした。', 'err'); return; }
+          currentWork.paused = true;
+          currentWork.pauseReason = reason;
+          saveWork();
+          renderWorkBar();
+          showMsg('中断中です（' + reason + '）。再開するときは「再開」を押してください。', 'warn');
+        })
+        .catch(function () { showMsg('通信に失敗しました。', 'err'); });
+    }
+
+    function doResume() {
+      showMsg('再開を記録しています…', 'info');
+
+      apiPost({ action: 'resume', logId: currentWork.logId })
+        .then(function (res) {
+          if (!res || !res.ok) { showMsg('再開を記録できませんでした。', 'err'); return; }
+          currentWork.paused = false;
+          currentWork.pauseReason = '';
+          saveWork();
+          renderWorkBar();
+          var m = (res.addedMinutes != null) ? '（中断 ' + res.addedMinutes + '分）' : '';
+          showMsg('作業を再開しました。' + m, 'info');
+        })
+        .catch(function () { showMsg('通信に失敗しました。', 'err'); });
     }
 
     // 経過時間は画面に出さない（作業を急かさないため）。
@@ -1463,6 +1578,13 @@
 
     el.btnFinish.onclick = function () {
       if (!currentWork) return;
+
+      // 中断したまま完了しようとした場合は、そのことを伝えておく
+      // （サーバー側で中断は自動的に閉じられる）
+      if (currentWork.paused) {
+        if (!confirm('中断中のまま完了します。よろしいですか？\n中断していた時間は工数から差し引かれます。')) return;
+      }
+
       photos = [];
       el.note.value = '';
       el.photoList.innerHTML = '';
