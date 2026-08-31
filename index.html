@@ -205,7 +205,6 @@
       padding: 8px 12px;
       background: var(--panel);
       border-bottom: 1px solid var(--line);
-      cursor: pointer;
     }
     #infoBar.show { display: flex; }
     #infoBar .zb { font-size: 21px; font-weight: 800; letter-spacing: .02em; flex: none; }
@@ -220,12 +219,16 @@
     }
     #infoBar .more {
       flex: none;
-      font-size: 12px;
+      font-size: 13px;
       font-weight: 700;
       color: var(--accent);
-      border: 1px solid var(--accent);
+      background: #fff;
+      border: 2px solid var(--accent);
       border-radius: 999px;
-      padding: 4px 11px;
+      padding: 8px 16px;
+      min-height: 44px;
+      -webkit-appearance: none;
+      appearance: none;
     }
 
     /* ===================================================================
@@ -265,17 +268,31 @@
 
     /* 検査の一覧 */
     #listLayer { overflow-y: auto; -webkit-overflow-scrolling: touch; background: var(--bg); padding: 12px; }
+    /* カードは button で作る。
+       iOS Safari は div へのタップを拾わないことがあるため。 */
     .pendCard {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      justify-content: flex-start;
+      text-align: left;
+      width: 100%;
+      min-height: 0;
+      font-family: inherit;
+      font-weight: 400;
+      font-size: 15px;
+      color: var(--text);
       background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 10px;
       padding: 13px 15px;
       margin-bottom: 10px;
-      display: flex;
-      flex-direction: column;
       gap: 8px;
+      -webkit-appearance: none;
+      appearance: none;
       cursor: pointer;
     }
+    .pendCard:active { background: #eef5fd; transform: none; }
     .pendCard .zb { font-size: 21px; font-weight: 800; letter-spacing: .02em; }
     .pendCard .meta { font-size: 13px; color: var(--muted); }
     .pendCard .go { align-self: flex-start; font-size: 13px; font-weight: 700; color: var(--accent); }
@@ -592,7 +609,7 @@
   <div id="infoBar">
     <span class="zb" id="ibZuban"></span>
     <span class="nm" id="ibName"></span>
-    <span class="more">詳細</span>
+    <button type="button" class="more" id="btnDetail">詳細</button>
   </div>
 
   <!-- ============ 中段：プレビュー枠（固定） ============ -->
@@ -774,7 +791,7 @@
 
     var el = {};
     ['workerBtn','tabWork','tabInspect','pendBadge','workBar','wbZuban','wbSub','btnFinish','wbRemind',
-     'searchRow','q','btnSearch','infoBar','ibZuban','ibName',
+     'searchRow','q','btnSearch','infoBar','ibZuban','ibName','btnDetail',
      'stage','camLayer','pdfLayer','pdfCanvas','frameLayer','pdfFrame','listLayer','emptyLayer','msg','suggest',
      'barScan','btnScan','camFile','barCam','btnStopScan','btnTorch','zoom','zoomLabel',
      'barPdf','zoomOut','pdfZoomLabel','zoomIn','fitWidth','pageGroup','pagePrev','pageInfo','pageNext','btnBackScan',
@@ -1640,7 +1657,8 @@
       }
 
       items.forEach(function (it) {
-        var card = document.createElement('div');
+        var card = document.createElement('button');
+        card.type = 'button';
         card.className = 'pendCard';
 
         var zb = document.createElement('div');
@@ -1860,7 +1878,7 @@
     // ===================================================================
     // 図番の詳細（帯をタップすると開く）
     // ===================================================================
-    el.infoBar.onclick = function () {
+    el.btnDetail.onclick = function () {
       var r = currentRow;
       el.dpZuban.textContent = r ? r.zuban : el.ibZuban.textContent;
       el.dpName.textContent = r ? (r.name || '') : '';
