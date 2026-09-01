@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0b5cab">
   <!-- この版数は画面右上に出ます。古い版が動いていないか確認できます。
        更新したら必ずここも変えてください。 -->
-  <meta name="app-version" content="2026-08-31-03">
+  <meta name="app-version" content="2026-09-01-01">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -305,6 +305,55 @@
     #pdfCanvas { display: block; margin: 8px auto; background: #fff; box-shadow: 0 2px 14px rgba(0,0,0,.35); }
     #pdfFrame { width: 100%; height: 100%; border: 0; }
 
+    /* 検査で見る写真。図面と同じ枠に出し、画面を切り替えないで済むようにする */
+    #photoLayer { background: #2b2f34; }
+    #photoScroll {
+      position: absolute;
+      inset: 0 0 74px 0;
+      overflow: auto;
+      touch-action: pan-x pan-y;
+      cursor: grab;
+    }
+    #photoScroll.dragging { cursor: grabbing; }
+    #photoImg { display: block; margin: 8px auto; background: #1b1e22; }
+
+    /* 下に並ぶ小さな写真。押すと大きい方が切り替わる */
+    #photoStrip {
+      position: absolute;
+      left: 0; right: 0; bottom: 0;
+      height: 74px;
+      display: flex;
+      gap: 6px;
+      padding: 7px 8px;
+      overflow-x: auto;
+      background: rgba(0,0,0,.55);
+      touch-action: pan-x;
+    }
+    #photoStrip button {
+      flex: none;
+      width: 58px;
+      height: 58px;
+      min-height: 58px;
+      padding: 0;
+      border-radius: 6px;
+      border: 2px solid transparent;
+      background: #4a4e54;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      overflow: hidden;
+      position: relative;
+    }
+    #photoStrip button.on { border-color: #fff; }
+    #photoStrip button img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    #photoStrip button .lb {
+      position: absolute; left: 0; right: 0; bottom: 0;
+      font-size: 10px; padding: 1px 0;
+      background: rgba(11,92,171,.9);
+    }
+    #photoStrip button .lb.slip { background: rgba(176,96,0,.9); }
+    #photoStrip button .lb.insp { background: rgba(18,112,63,.9); }
+
     /* 検査の一覧
        -webkit-overflow-scrolling: touch は、慣性スクロール中に
        中のボタンのタップを取りこぼすことがあるため使わない。 */
@@ -565,25 +614,6 @@
     }
     .photoLinks a.slip { color: var(--warn); border-color: var(--warn); }
 
-    /* 製造時の写真（検査で確認する）。画像が出せない時はボタン表示に落ちる */
-    #ppMade { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-    #ppMade .made {
-      display: block;
-      width: 96px;
-      border-radius: 8px;
-      overflow: hidden;
-      border: 1px solid var(--line);
-      text-decoration: none;
-      background: #fff;
-    }
-    #ppMade .made img { width: 100%; height: 96px; object-fit: cover; display: block; background: #eee; }
-    #ppMade .made .cap {
-      display: block; padding: 5px 0; text-align: center;
-      font-size: 12px; font-weight: 700; color: #fff; background: var(--accent);
-    }
-    #ppMade .made.slip .cap { background: var(--warn); }
-    #ppMade .made.insp .cap { background: var(--ok); }
-    #ppMade .none { font-size: 14px; color: var(--muted); padding: 6px 0; }
     #ppNew { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
     #ppNew .thumb {
       position: relative; width: 82px; height: 82px;
@@ -706,6 +736,12 @@
     <div class="layer" id="frameLayer"><iframe id="pdfFrame" title="図面PDF"></iframe></div>
     <div class="layer" id="listLayer"></div>
 
+    <!-- 検査で使う写真。ドライブへ飛ばさず、この枠の中で見る -->
+    <div class="layer" id="photoLayer">
+      <div id="photoScroll"><img id="photoImg" alt=""></div>
+      <div id="photoStrip"></div>
+    </div>
+
     <div class="layer show" id="emptyLayer">
       <div class="big">図面</div>
       <p>下の「カメラで読取」で QR を読むか、<br>上の欄に図番を入力してください。</p>
@@ -752,6 +788,7 @@
         <button type="button" id="insZoomIn" class="ghost" aria-label="拡大">＋</button>
         <button type="button" id="insFit" class="ghost lbl">幅</button>
         <div class="grow"></div>
+        <button type="button" id="btnShowDrawing" class="ghost lbl">図面</button>
         <button type="button" id="btnInsPhotos" class="ghost lbl">写真<span class="cnt" id="insPhotoCnt"></span></button>
       </div>
       <div class="line">
@@ -832,9 +869,6 @@
     <div class="sheetbox">
       <h2>写真</h2>
       <div class="targetSub" id="ppTarget"></div>
-
-      <label class="fieldLabel">製造時に撮った写真</label>
-      <div id="ppMade"></div>
 
       <label class="fieldLabel">検査で追加する写真</label>
       <button type="button" id="btnAddInspectPhoto" class="ghost" style="width:100%">写真を撮る</button>
@@ -941,11 +975,12 @@
      'btnPause','pausePanel','paTarget','pauseReasons','btnPauseCancel',
      'searchRow','q','btnSearch','infoBar','ibZuban','ibName','btnDetail',
      'stage','camLayer','pdfLayer','pdfCanvas','frameLayer','pdfFrame','listLayer','emptyLayer','msg','suggest',
+     'photoLayer','photoScroll','photoImg','photoStrip','btnShowDrawing',
      'barScan','btnScan','camFile','barCam','btnStopScan','btnTorch','zoom','zoomLabel',
      'barPdf','zoomOut','pdfZoomLabel','zoomIn','fitWidth','pageGroup','pagePrev','pageInfo','pageNext','btnBackScan',
      'barJudge','insZoomOut','insZoomLabel','insZoomIn','insFit','btnInsPhotos','insPhotoCnt',
      'btnInsBack','btnInsOk','btnInsNg',
-     'photoPanel','ppTarget','ppMade','btnAddInspectPhoto','inspectPhotoFile','ppNew','btnPhotoClose',
+     'photoPanel','ppTarget','btnAddInspectPhoto','inspectPhotoFile','ppNew','btnPhotoClose',
      'workerPanel','workerList','workerEmpty','btnWorkerLater',
      'startPanel','spZuban','spName','spQtyHint','qtyMinus','qtyValue','qtyPlus','btnStart','btnViewOnly',
      'finishPanel','fpZuban','fpSub','btnAddProduct','btnAddSlip','photoFile','photoList','note',
@@ -973,7 +1008,7 @@
     // className を丸ごと入れ替えると、要素が持っている他の指定
     //（検査バーの二段組みなど）まで消えてしまう。表示の切り替えだけを触る。
     function showLayer(name) {
-      ['camLayer','pdfLayer','frameLayer','listLayer','emptyLayer'].forEach(function (k) {
+      ['camLayer','pdfLayer','frameLayer','listLayer','emptyLayer','photoLayer'].forEach(function (k) {
         el[k].classList.toggle('show', k === name);
       });
     }
@@ -1211,10 +1246,21 @@
     el.zoomOut.onclick = function () { zoomBy(0.8); };
     el.fitWidth.onclick = function () { renderPdfPage(true); };
 
-    // 検査バーからも同じ操作ができるようにする
-    el.insZoomIn.onclick = function () { zoomBy(1.25); };
-    el.insZoomOut.onclick = function () { zoomBy(0.8); };
-    el.insFit.onclick = function () { renderPdfPage(true); };
+    // 検査バーの拡大縮小は、いま見ているものに効かせる（図面／写真）
+    function viewingPhoto() { return el.photoLayer.classList.contains('show'); }
+
+    el.insZoomIn.onclick = function () {
+      if (viewingPhoto()) { photoScale = Math.min(8, photoScale * 1.25); applyPhotoScale(); }
+      else zoomBy(1.25);
+    };
+    el.insZoomOut.onclick = function () {
+      if (viewingPhoto()) { photoScale = Math.max(0.05, photoScale * 0.8); applyPhotoScale(); }
+      else zoomBy(0.8);
+    };
+    el.insFit.onclick = function () {
+      if (viewingPhoto()) fitPhoto();
+      else renderPdfPage(true);
+    };
     el.pagePrev.onclick = function () { if (pdfDoc && pdfPageNo > 1) { pdfPageNo--; renderPdfPage(false); } };
     el.pageNext.onclick = function () { if (pdfDoc && pdfPageNo < pdfDoc.numPages) { pdfPageNo++; renderPdfPage(false); } };
     el.btnBackScan.onclick = function () {
@@ -1945,6 +1991,10 @@
       el.ibName.textContent = (item.name || '') + '　' + item.qty + '本　製造: ' + item.worker;
       el.infoBar.className = 'show';
 
+      insPhotos = [];
+      el.photoImg.removeAttribute('src');
+      el.photoStrip.innerHTML = '';
+
       showBar('barJudge');          // 先に判定ボタンを出しておく
       showMsg('図面を読み込んでいます…', 'info');
 
@@ -1974,56 +2024,170 @@
       el.insPhotoCnt.textContent = inspectPhotos.length ? String(inspectPhotos.length) : '';
     }
 
+    // ---- 検査で見る写真（図面と同じ枠の中に出す）----
+    // ドライブへ飛ばすと画面が切り替わって判定の流れが途切れるので、
+    // 写真そのものを取り寄せて、この枠の中で見られるようにしている。
+    var insPhotos = [];      // [{ url, id, kind, dataUrl }]
+    var insPhotoNo = 0;
+    var photoScale = 1;
+
     el.btnInsPhotos.onclick = function () {
       if (!inspectItem) return;
-      el.ppTarget.textContent = inspectItem.zuban + '　' + (inspectItem.name || '')
-                              + '　製造: ' + inspectItem.worker;
-      renderMadePhotos();
-      renderInspectPhotos();
-      el.photoPanel.className = 'panel show';
+      openPhotoView();
     };
-    el.btnPhotoClose.onclick = function () { el.photoPanel.className = 'panel'; };
 
-    // 製造時に撮られた写真を並べる。
-    // ドライブのサムネイルを試し、出せなければリンクのボタンに切り替える。
-    function renderMadePhotos() {
-      el.ppMade.innerHTML = '';
-      var raw = String((inspectItem && inspectItem.photoLinks) || '');
-      var lines = raw.split('\n').filter(function (s) { return s.trim(); });
+    el.btnShowDrawing.onclick = function () {
+      if (pdfDoc) { showLayer('pdfLayer'); renderPdfPage(true); }
+      else showLayer('emptyLayer');
+      hideMsg();
+    };
 
-      if (!lines.length) {
-        el.ppMade.innerHTML = '<div class="none">製造時の写真はありません。</div>';
-        return;
-      }
+    function buildPhotoList() {
+      insPhotos = [];
 
-      lines.forEach(function (line, i) {
-        var isSlip = line.indexOf('[伝票]') === 0;
-        var isInsp = line.indexOf('[検査]') === 0;
-        var url = line.replace(/^\[[^\]]*\]\s*/, '');
-        var idm = url.match(/\/d\/([^/]+)/);
+      // 製造時に撮られたもの
+      String((inspectItem && inspectItem.photoLinks) || '')
+        .split('\n').filter(function (s) { return s.trim(); })
+        .forEach(function (line) {
+          var kind = line.indexOf('[伝票]') === 0 ? 'slip'
+                   : line.indexOf('[検査]') === 0 ? 'insp' : 'product';
+          var url = line.replace(/^\[[^\]]*\]\s*/, '');
+          var m = url.match(/\/d\/([^/]+)/);
+          if (m) insPhotos.push({ url: url, id: m[1], kind: kind, dataUrl: '' });
+        });
 
-        var a = document.createElement('a');
-        a.className = 'made' + (isSlip ? ' slip' : (isInsp ? ' insp' : ''));
-        a.href = url;
-        a.target = '_blank';
-        a.rel = 'noopener';
-
-        if (idm) {
-          var img = document.createElement('img');
-          img.src = 'https://drive.google.com/thumbnail?id=' + idm[1] + '&sz=w300';
-          img.alt = '';
-          img.onerror = function () { img.style.display = 'none'; };
-          a.appendChild(img);
-        }
-
-        var cap = document.createElement('span');
-        cap.className = 'cap';
-        cap.textContent = (isSlip ? '伝票' : (isInsp ? '検査' : '製品')) + ' ' + (i + 1);
-        a.appendChild(cap);
-
-        el.ppMade.appendChild(a);
+      // 今回の検査で撮った分も並べる（まだ保存前）
+      inspectPhotos.forEach(function (p) {
+        insPhotos.push({ url: '', id: '', kind: 'insp', dataUrl: p.dataUrl, isNew: true });
       });
     }
+
+    function openPhotoView() {
+      buildPhotoList();
+      insPhotoNo = 0;
+      photoScale = 1;
+      showLayer('photoLayer');
+      renderStrip();
+
+      if (insPhotos.length) {
+        loadPhoto(0);
+      } else {
+        el.photoImg.removeAttribute('src');
+        showMsg('この作業には写真がありません。下の「＋撮る」で追加できます。', 'warn');
+      }
+    }
+
+    function renderStrip() {
+      el.photoStrip.innerHTML = '';
+
+      insPhotos.forEach(function (p, i) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = (i === insPhotoNo) ? 'on' : '';
+
+        if (p.dataUrl) {
+          var im = document.createElement('img');
+          im.src = p.dataUrl;
+          b.appendChild(im);
+        }
+
+        var lb = document.createElement('span');
+        lb.className = 'lb' + (p.kind === 'slip' ? ' slip' : (p.kind === 'insp' ? ' insp' : ''));
+        lb.textContent = p.kind === 'slip' ? '伝票' : (p.kind === 'insp' ? '検査' : '製品');
+        b.appendChild(lb);
+
+        b.onclick = function () { loadPhoto(i); };
+        el.photoStrip.appendChild(b);
+      });
+
+      // 検査で写真を足すための入口も、ここに置いておく
+      var add = document.createElement('button');
+      add.type = 'button';
+      add.textContent = '＋撮る';
+      add.onclick = function () {
+        renderInspectPhotos();
+        el.photoPanel.className = 'panel show';
+      };
+      el.photoStrip.appendChild(add);
+    }
+
+    function loadPhoto(i) {
+      if (i < 0 || i >= insPhotos.length) return;
+      insPhotoNo = i;
+      photoScale = 1;
+
+      [].forEach.call(el.photoStrip.children, function (b, n) {
+        b.className = (n === i) ? 'on' : '';
+      });
+
+      var p = insPhotos[i];
+
+      if (p.dataUrl) { applyPhoto(p.dataUrl); return; }
+
+      showMsg('写真を読み込んでいます…', 'info');
+      apiGet('?api=photo&id=' + encodeURIComponent(p.id))
+        .then(function (res) {
+          if (!res || !res.ok) throw new Error((res && res.message) || '');
+          p.dataUrl = 'data:' + res.mimeType + ';base64,' + res.data;
+          applyPhoto(p.dataUrl);
+          renderStrip();      // 小さい方にも反映する
+          hideMsg();
+        })
+        .catch(function () {
+          showMsg('写真を読み込めませんでした。', 'err');
+        });
+    }
+
+    function applyPhoto(dataUrl) {
+      el.photoImg.src = dataUrl;
+      el.photoImg.onload = function () { fitPhoto(); };
+    }
+
+    function fitPhoto() {
+      var box = el.photoScroll;
+      var iw = el.photoImg.naturalWidth || 1;
+      var ih = el.photoImg.naturalHeight || 1;
+      var sw = (box.clientWidth - 16) / iw;
+      var sh = (box.clientHeight - 16) / ih;
+      photoScale = Math.min(sw, sh);
+      applyPhotoScale();
+    }
+
+    function applyPhotoScale() {
+      var iw = el.photoImg.naturalWidth || 1;
+      el.photoImg.style.width = Math.max(40, Math.round(iw * photoScale)) + 'px';
+      el.photoImg.style.height = 'auto';
+      el.pdfZoomLabel.textContent = Math.round(photoScale * 100) + '%';
+      el.insZoomLabel.textContent = Math.round(photoScale * 100) + '%';
+    }
+
+    // 写真も指やタッチペンで動かせるようにする
+    (function () {
+      var dragging = false, sx = 0, sy = 0, sl = 0, st = 0;
+      el.photoScroll.addEventListener('pointerdown', function (e) {
+        dragging = true; sx = e.clientX; sy = e.clientY;
+        sl = el.photoScroll.scrollLeft; st = el.photoScroll.scrollTop;
+        el.photoScroll.classList.add('dragging');
+      });
+      el.photoScroll.addEventListener('pointermove', function (e) {
+        if (!dragging) return;
+        el.photoScroll.scrollLeft = sl - (e.clientX - sx);
+        el.photoScroll.scrollTop = st - (e.clientY - sy);
+      });
+      function end() { dragging = false; el.photoScroll.classList.remove('dragging'); }
+      el.photoScroll.addEventListener('pointerup', end);
+      el.photoScroll.addEventListener('pointercancel', end);
+      el.photoScroll.addEventListener('pointerleave', end);
+    })();
+
+    el.btnPhotoClose.onclick = function () {
+      el.photoPanel.className = 'panel';
+      // 撮った分を、枠の中の並びにも反映する
+      if (el.photoLayer.classList.contains('show')) {
+        buildPhotoList();
+        renderStrip();
+      }
+    };
 
     el.btnAddInspectPhoto.onclick = function () { el.inspectPhotoFile.click(); };
 
