@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0b5cab">
   <!-- この版数は画面右上に出ます。古い版が動いていないか確認できます。
        更新したら必ずここも変えてください。 -->
-  <meta name="app-version" content="2026-09-01-01">
+  <meta name="app-version" content="2026-09-01-02">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -2143,13 +2143,25 @@
       el.photoImg.onload = function () { fitPhoto(); };
     }
 
+    var fitTries = 0;
+
     function fitPhoto() {
       var box = el.photoScroll;
+      var bw = box.clientWidth - 16;
+      var bh = box.clientHeight - 16;
+
+      // 枠の大きさがまだ決まっていないことがある（表示直後や画面回転の直後）。
+      // その状態で計算すると倍率がおかしくなるので、決まるまで待ち直す。
+      if (bw <= 0 || bh <= 0) {
+        if (fitTries++ < 20) setTimeout(fitPhoto, 100);
+        return;
+      }
+      fitTries = 0;
+
       var iw = el.photoImg.naturalWidth || 1;
       var ih = el.photoImg.naturalHeight || 1;
-      var sw = (box.clientWidth - 16) / iw;
-      var sh = (box.clientHeight - 16) / ih;
-      photoScale = Math.min(sw, sh);
+
+      photoScale = Math.max(0.05, Math.min(bw / iw, bh / ih));
       applyPhotoScale();
     }
 
