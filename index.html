@@ -4,9 +4,20 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#0b5cab">
+  <!-- ホーム画面に追加したとき、Safari の枠なしでアプリとして開くための指定。
+       iPad の一括配布（管理ツール）で Web クリップとして配る前提。
+       ステータスバーの下まで画面を使うので、上下の余白は
+       env(safe-area-inset-*) で確保している（画面の骨格の CSS を参照）。 -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="図面ビューア">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <link rel="manifest" href="manifest.json">
   <!-- この版数は画面右上に出ます。古い版が動いていないか確認できます。
        更新したら必ずここも変えてください。 -->
-  <meta name="app-version" content="2026-09-01-02">
+  <meta name="app-version" content="2026-09-11-01">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -1868,7 +1879,23 @@
         }).then(function (res) {
           el.btnSaveFinish.disabled = false;
           el.saveProgress.className = '';
-          if (!res || !res.ok) { alert('記録できませんでした。' + ((res && res.message) || '')); return; }
+
+          if (!res || !res.ok) {
+            // 二度押しなどで、すでに完了している場合。
+            // 失敗ではないので、作業中の表示を片付けて終わる。
+            if (res && res.alreadyDone) {
+              currentWork = null;
+              saveWork();
+              renderWorkBar();
+              el.finishPanel.className = 'panel';
+              photos = [];
+              showMsg('この作業はすでに完了しています。', 'warn');
+              refreshPendBadge();
+              return;
+            }
+            alert('記録できませんでした。' + ((res && res.message) || ''));
+            return;
+          }
 
           var msg = currentWork.zuban + ' の作業を記録しました。お疲れさまでした。';
           if (uploaded.length < photos.length) {
@@ -2062,7 +2089,8 @@
       });
     }
 
-    function openPhotoView() {
+    // startNo を渡すと、その写真から開く（詳細パネルのリンクから来たとき）
+    function openPhotoView(startNo) {
       buildPhotoList();
       insPhotoNo = 0;
       photoScale = 1;
@@ -2070,7 +2098,7 @@
       renderStrip();
 
       if (insPhotos.length) {
-        loadPhoto(0);
+        loadPhoto((startNo > 0 && startNo < insPhotos.length) ? startNo : 0);
       } else {
         el.photoImg.removeAttribute('src');
         showMsg('この作業には写真がありません。下の「＋撮る」で追加できます。', 'warn');
@@ -2129,12 +2157,15 @@
         .then(function (res) {
           if (!res || !res.ok) throw new Error((res && res.message) || '');
           p.dataUrl = 'data:' + res.mimeType + ';base64,' + res.data;
+          // 読み込み中に別の写真へ切り替えていたら、取り寄せた分は控えだけにして
+          // 今見ている写真を上書きしない
+          if (insPhotoNo !== i || insPhotos[i] !== p) { renderStrip(); return; }
           applyPhoto(p.dataUrl);
           renderStrip();      // 小さい方にも反映する
           hideMsg();
         })
         .catch(function () {
-          showMsg('写真を読み込めませんでした。', 'err');
+          if (insPhotoNo === i) showMsg('写真を読み込めませんでした。', 'err');
         });
     }
 
@@ -2321,18 +2352,32 @@
       }
       el.dpBody.innerHTML = lines.join('<br>');
 
-      // 検査中なら、判断材料として写真のリンクも並べる
+      // 検査中なら、判断材料として写真のリンクも並べる。
+      // ホーム画面から開いている（アプリ扱いの）ときに別タブへ飛ばすと
+      // Safari に切り替わってアプリから出てしまうので、
+      // 図面と同じ枠の中の写真表示に切り替える。
       el.dpPhotos.innerHTML = '';
       if (inspectItem && inspectItem.photoLinks) {
         String(inspectItem.photoLinks).split('\n').filter(function (s) { return s.trim(); })
           .forEach(function (line, i) {
             var slip = line.indexOf('[伝票]') === 0;
+            var url = line.replace(/^\[[^\]]*\]\s*/, '');
             var a = document.createElement('a');
-            a.href = line.replace(/^\[[^\]]*\]\s*/, '');
-            a.target = '_blank';
-            a.rel = 'noopener';
+            a.href = '#';
             a.className = slip ? 'slip' : '';
             a.textContent = (slip ? '伝票' : '製品') + ' ' + (i + 1);
+            a.onclick = function (ev) {
+              ev.preventDefault();
+              el.detailPanel.className = 'panel';
+              // 並び順は同じだが、ID が取れない行は一覧に入らないので URL で探す
+              buildPhotoList();
+              var n = -1;
+              for (var k = 0; k < insPhotos.length; k++) {
+                if (insPhotos[k].url === url) { n = k; break; }
+              }
+              if (n >= 0) openPhotoView(n);
+              else window.open(url, '_blank');   // 枠内で出せない形式のときだけ
+            };
             el.dpPhotos.appendChild(a);
           });
       }
