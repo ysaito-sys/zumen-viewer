@@ -17,7 +17,7 @@
   <link rel="manifest" href="manifest.json">
   <!-- この版数は画面右上に出ます。古い版が動いていないか確認できます。
        更新したら必ずここも変えてください。 -->
-  <meta name="app-version" content="2026-11-02-02">
+  <meta name="app-version" content="2026-11-02-03">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -315,7 +315,7 @@
     #pdfLayer.dragging { cursor: grabbing; }
     /* 図面と書き込みを同じ箱に重ねる。書き込みの位置は箱に対する割合（%）なので、
        拡大縮小しても図面と一緒に動く */
-    #pdfWrap { position: relative; margin: 8px auto; box-shadow: 0 2px 14px rgba(0,0,0,.35); }
+    #pdfWrap { position: relative; isolation: isolate; margin: 8px auto; box-shadow: 0 2px 14px rgba(0,0,0,.35); }
     #pdfCanvas { display: block; background: #fff; }
 
     /* ---- 書き込み（マーカー・メモ）---- */
@@ -1398,7 +1398,11 @@
         pdfTask = null;
       }
 
+      // 拡大を続けて押した時、遅れて終わった古い描画で上書きしないための番号
+      var seq = ++renderSeq;
+
       pdfDoc.getPage(pdfPageNo).then(function (page) {
+        if (seq !== renderSeq) return;
         var base = page.getViewport({ scale: 1 });
 
         if (fitWidth) {
@@ -1407,24 +1411,21 @@
           fitScale = pdfScale;
         }
 
-        var dpr = window.devicePixelRatio || 1;
-        var vp = page.getViewport({ scale: pdfScale * dpr });
+        var w = Math.floor(base.width * pdfScale), h = Math.floor(base.height * pdfScale);
         var canvas = el.pdfCanvas;
 
-        canvas.width = Math.floor(vp.width);
-        canvas.height = Math.floor(vp.height);
-        canvas.style.width = Math.floor(vp.width / dpr) + 'px';
-        canvas.style.height = Math.floor(vp.height / dpr) + 'px';
-        el.pdfWrap.style.width = canvas.style.width;
-        el.pdfWrap.style.height = canvas.style.height;
-        var fs = Math.max(8, Math.min(15, (vp.width / dpr) * 0.016));
+        // 表示の大きさは先に変える。描き終わるまでは前の絵を引き伸ばして見せるので、白く抜けない
+        canvas.style.width = w + 'px';
+        canvas.style.height = h + 'px';
+        el.pdfWrap.style.width = w + 'px';
+        el.pdfWrap.style.height = h + 'px';
+        var fs = Math.max(8, Math.min(15, w * 0.016));
         el.pdfWrap.style.setProperty('--nfs', fs.toFixed(1) + 'px');
 
         // 拡大縮小の前に見ていた点が、同じ場所に来るようにスクロールを合わせる
         if (zoomAnchor) {
           var a = zoomAnchor;
           zoomAnchor = null;
-          var w = vp.width / dpr, h = vp.height / dpr;
           el.pdfLayer.scrollLeft = el.pdfWrap.offsetLeft + a.nx * w - a.sx;
           el.pdfLayer.scrollTop = el.pdfWrap.offsetTop + a.ny * h - a.sy;
         }
@@ -1436,14 +1437,31 @@
 
         updatePdfLabels();
 
-        pdfTask = page.render({ canvasContext: canvas.getContext('2d'), viewport: vp });
-        return pdfTask.promise;
+        // iPad・iPhone は大きすぎるキャンバスを描けず真っ白になるので、画素数に上限を設ける
+        // （大きく拡大した時は、少しだけ粗く描く）
+        var dpr = window.devicePixelRatio || 1;
+        if (w * h * dpr * dpr > MAX_CANVAS_PX) dpr = Math.sqrt(MAX_CANVAS_PX / (w * h));
+        var vp = page.getViewport({ scale: pdfScale * dpr });
+
+        // 裏の紙に描いてから、描き終わったら一度に差し替える
+        var off = document.createElement('canvas');
+        off.width = Math.floor(vp.width);
+        off.height = Math.floor(vp.height);
+        pdfTask = page.render({ canvasContext: off.getContext('2d'), viewport: vp });
+        return pdfTask.promise.then(function () {
+          if (seq !== renderSeq) return;
+          canvas.width = off.width;
+          canvas.height = off.height;
+          canvas.getContext('2d').drawImage(off, 0, 0);
+        });
       }).then(function () {
-        pdfTask = null;
+        if (seq === renderSeq) pdfTask = null;
       }).catch(function () {
-        pdfTask = null;
+        if (seq === renderSeq) pdfTask = null;
       });
     }
+    var renderSeq = 0;
+    var MAX_CANVAS_PX = 10000000;    // 約 1000 万画素（iOS の上限 1677 万より余裕を持たせる）
 
     function updatePdfLabels() {
       var pct = Math.round(pdfScale * 100) + '%';
@@ -1517,11 +1535,15 @@
       var stroke = null;      // 描いている途中の線 { ring, p0, pts, line }
 
       el.pdfLayer.addEventListener('pointerdown', function (e) {
+        // 線を引いている間に別の指や手のひらが触れても、今の線はそのまま続ける
+        // （ここで新しい線を始めると、前の線が保存されずに画面に残り、あとで消える）
+        if (stroke) { e.preventDefault(); return; }
         var p0 = (editTool === 'mark' || editTool === 'ring') ? toNorm(e.clientX, e.clientY) : null;
         if (p0) {
           var ring = editTool === 'ring';
-          stroke = { ring: ring, p0: p0, pts: [p0],
+          stroke = { id: e.pointerId, ring: ring, p0: p0, pts: [p0],
                      line: makeMarkLine([p0], ring ? RING_WIDTH : MARK_WIDTH, markColor, ring ? 'ring' : '') };
+          liveLine = stroke.line;
           el.noteSvg.appendChild(stroke.line);
           try { el.pdfLayer.setPointerCapture(e.pointerId); } catch (err) {}
           e.preventDefault();
@@ -1533,6 +1555,7 @@
       });
 
       el.pdfLayer.addEventListener('pointermove', function (e) {
+        if (stroke && e.pointerId !== stroke.id) return;
         if (stroke && stroke.ring) {
           // 囲む：押した点から今の点までを対角にした楕円
           stroke.pts = ellipsePts(stroke.p0, toNorm(e.clientX, e.clientY, true));
@@ -1556,8 +1579,10 @@
 
       function end(e) {
         if (stroke) {
+          if (e.pointerId !== stroke.id) return;
           var s = stroke;
           stroke = null;
+          liveLine = null;
           if (e.type === 'pointercancel' || s.pts.length < 3) { s.line.remove(); return; }
           saveMark(s);
           return;
@@ -1587,6 +1612,8 @@
     var editingNote = null;         // 文字を直しているメモ
     var infoNote = null;            // 詳細を開いている書き込み
     var notesSeq = 0;               // 古い問い合わせの結果で上書きしないための番号
+    var hiddenIds = {};             // 消した・直した（古い行になった）が、まだ一覧の取り直しが終わっていない書き込み
+    var liveLine = null;            // いま指でなぞっている途中の線
 
     var MARK_WIDTH = 0.018;         // 蛍光ペンの太さ（ページ幅に対する割合）
     var RING_WIDTH = 0.005;         // 囲む線の太さ
@@ -1665,11 +1692,21 @@
         d.lastChild.textContent = n.text;
         el.noteLayer.appendChild(d);
       });
+
+      // なぞっている途中の線は notes に入っていないので、描き直しで消さないよう付け直す
+      if (liveLine) el.noteSvg.appendChild(liveLine);
     }
 
-    function loadNotes() {
-      notes = [];
-      renderNotes();
+    // 書き込みを取り直す。
+    //   refresh なし … 図面を開いた時。前の図面の書き込みを消してから読む
+    //   refresh あり … 保存のあとの取り直し。返事が来るまで今の表示をそのまま残す
+    //                  （GAS の返事は数秒かかり、その間すべての線が消えて見えていた）
+    function loadNotes(refresh) {
+      if (!refresh) {
+        notes = [];
+        hiddenIds = {};
+        renderNotes();
+      }
       if (!noteZ) return;
 
       var seq = ++notesSeq;
@@ -1677,7 +1714,12 @@
         .then(function (res) {
           if (seq !== notesSeq) return;
           if (!res || !res.ok) { note('書き込みを読めず: ' + ((res && res.message) || '')); return; }
-          notes = res.notes || [];
+          var got = (res.notes || []).filter(function (n) { return !hiddenIds[n.id]; });
+          var ids = {};
+          got.forEach(function (n) { ids[n.id] = true; });
+          // 送信中・保存直後の自分の書き込みは、一覧に載るまで残す
+          notes.forEach(function (n) { if (n.local && !ids[n.id]) got.push(n); });
+          notes = got;
           renderNotes();
 
           var stale = notes.filter(function (n) { return n.stale; }).length;
@@ -1707,12 +1749,31 @@
     //   書く … 足した行を消せば戻る
     //   直す … 足した行を消して、閉じた（置換にした）行を有効に戻す
     //   消す … 閉じた（削除にした）行を有効に戻す
-    function sendNote(payload, okText) {
+    // local … 画面に先に出しておいた新しい書き込み（保存が終わるまで薄く表示）
+    function sendNote(payload, okText, local) {
       payload.worker = currentWorker;
       payload.z = noteZ;
+
+      // 返事を待たずに画面へ反映する
+      if (payload.action === 'noteDelete') {
+        hiddenIds[payload.id] = true;
+        notes = notes.filter(function (n) { return n.id !== payload.id; });
+        renderNotes();
+      } else if (payload.action === 'noteUpdate') {
+        var cur = findNote(payload.id);
+        if (cur) {
+          if (payload.text) cur.text = payload.text;
+          if (payload.shape) cur.shape = payload.shape;
+          cur.stale = false;
+          renderNotes();
+        }
+      }
+
       return apiPost(payload)
         .then(function (res) {
           if (!res || !res.ok) throw new Error((res && res.message) || '保存できませんでした');
+          if (payload.action === 'noteUpdate') hiddenIds[payload.id] = true;   // 古い行
+          if (local) { local.id = res.id; local.pending = false; renderNotes(); }
           var u = {
             created: (payload.action !== 'noteDelete' && res.id) ? res.id : null,
             closed: (payload.action !== 'noteAdd') ? payload.id : null
@@ -1720,11 +1781,14 @@
           if (u.created || u.closed) undoStack.push(u);
           updateUndoBtn();
           if (okText) showMsg(okText, 'info');
-          return loadNotes();
+          return loadNotes(true);
         })
         .catch(function (err) {
           showMsg('保存できませんでした: ' + err.message, 'err');
-          return loadNotes();
+          delete hiddenIds[payload.id];
+          if (local) notes = notes.filter(function (n) { return n !== local; });
+          renderNotes();
+          return loadNotes(true);
         });
     }
 
@@ -1734,6 +1798,14 @@
       var u = undoStack.pop();
       updateUndoBtn();
       if (!u || needWorker()) return;
+
+      // 足した書き込みは先に画面から消し、戻す行は隠すのをやめておく
+      if (u.created) {
+        hiddenIds[u.created] = true;
+        notes = notes.filter(function (n) { return n.id !== u.created; });
+        renderNotes();
+      }
+      if (u.closed) delete hiddenIds[u.closed];
 
       var step = Promise.resolve({ ok: true });
       if (u.created) {
@@ -1752,7 +1824,8 @@
         showMsg('1つ戻しました。', 'info');
       }).catch(function (err) {
         showMsg('戻せませんでした。' + err.message, 'err');
-      }).then(loadNotes);
+        if (u.created) delete hiddenIds[u.created];
+      }).then(function () { return loadNotes(true); });
     };
 
     function saveMark(s) {
@@ -1760,9 +1833,11 @@
       s.line.classList.add('pending');
       var w = s.ring ? RING_WIDTH : MARK_WIDTH;
       var shape = s.ring ? { pts: s.pts, w: w, t: 'ring' } : { pts: s.pts, w: w };
-      notes.push({ id: 'tmp' + Date.now(), page: pdfPageNo, kind: 'mark', pending: true,
-                   shape: shape, color: markColor, text: '' });
-      sendNote({ action: 'noteAdd', kind: 'mark', page: pdfPageNo, color: markColor, shape: shape });
+      var local = { id: 'tmp' + Date.now(), page: pdfPageNo, kind: 'mark', pending: true, local: true,
+                    shape: shape, color: markColor, text: '' };
+      notes.push(local);
+      renderNotes();
+      sendNote({ action: 'noteAdd', kind: 'mark', page: pdfPageNo, color: markColor, shape: shape }, '', local);
     }
 
     // ---- 書き込みの表示／非表示（図面だけを見たい時）----
@@ -1853,11 +1928,12 @@
         return;
       }
       if (!notePos) return;
-      notes.push({ id: 'tmp' + Date.now(), page: pdfPageNo, kind: 'note', pending: true,
-                   shape: { x: notePos[0], y: notePos[1] }, text: text });
+      var local = { id: 'tmp' + Date.now(), page: pdfPageNo, kind: 'note', pending: true, local: true,
+                    shape: { x: notePos[0], y: notePos[1] }, text: text };
+      notes.push(local);
       renderNotes();
       sendNote({ action: 'noteAdd', kind: 'note', page: pdfPageNo, text: text,
-                 shape: { x: notePos[0], y: notePos[1] } });
+                 shape: { x: notePos[0], y: notePos[1] } }, '', local);
       notePos = null;
     };
 
