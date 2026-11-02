@@ -17,7 +17,7 @@
   <link rel="manifest" href="manifest.json">
   <!-- この版数は画面右上に出ます。古い版が動いていないか確認できます。
        更新したら必ずここも変えてください。 -->
-  <meta name="app-version" content="2026-11-02-01">
+  <meta name="app-version" content="2026-11-02-02">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -363,16 +363,41 @@
     #pdfLayer.hideNotes #noteSvg, #pdfLayer.hideNotes #noteLayer { display: none; }
 
     /* 書き込みの道具 */
-    #barEdit button { min-height: 56px; }
-    #barEdit button.tool { font-size: 15px; padding: 8px 12px; }
+    /* 道具バーは二段。上に道具、下に拡大・色・戻す・終わる */
+    #barEdit button { min-height: 50px; }
+    #barEdit .line:first-child button { flex: 1 1 0; font-size: 16px; }
     #barEdit button.tool.on { background: var(--accent); color: #fff; }
-    #barEdit button.zm { min-width: 52px; font-size: 22px; }
-    /* スマホ幅では道具が収まりきらないので詰める */
-    @media (max-width: 420px) {
-      #barEdit { gap: 4px; padding: 8px 6px; }
-      #barEdit button.tool, #barEdit #btnEditDone { font-size: 14px; padding: 8px 9px; }
-      #barEdit button.zm { min-width: 40px; padding: 8px 0; }
+    #barEdit button.zm { min-width: 50px; font-size: 22px; flex: none; }
+    #barEdit button.undo, #barEdit button.done { flex: none; font-size: 15px; padding: 8px 14px; }
+    .colorGroup { display: none; gap: 8px; align-items: center; margin-left: 4px; }
+    .colorGroup.show { display: flex; }
+    .colorGroup .swatch {
+      width: 40px; height: 40px; min-height: 40px; padding: 0;
+      border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 0 1px var(--line);
     }
+    .colorGroup .swatch.on { box-shadow: 0 0 0 3px var(--text); }
+    @media (max-width: 420px) {
+      #barEdit .line { gap: 5px; }
+      #barEdit .line:first-child button { font-size: 15px; padding: 8px 4px; }
+      #barEdit button.zm { min-width: 40px; padding: 8px 0; }
+      #barEdit button.undo, #barEdit button.done { font-size: 14px; padding: 8px 9px; }
+      .colorGroup { gap: 5px; margin-left: 0; }
+      .colorGroup .swatch { width: 34px; height: 34px; min-height: 34px; }
+    }
+
+    /* 囲む線は細く、くっきり（蛍光ペンのように透かさない） */
+    #noteSvg .nmark.ring { opacity: .9; mix-blend-mode: normal; }
+    #noteSvg .nmark.ring.stale { opacity: .5; stroke-dasharray: 6 8; }
+
+    /* 書き込みの表示／非表示。図面の枠の右下に浮かせる */
+    #noteToggle {
+      position: absolute; right: 10px; bottom: 10px; z-index: 4;
+      min-height: 40px; padding: 6px 14px; font-size: 13px;
+      background: rgba(255,255,255,.95); color: var(--accent);
+      border: 2px solid var(--accent); border-radius: 999px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.25);
+    }
+    #noteToggle.off { background: var(--accent); color: #fff; }
     #noteChips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px; }
     #noteChips .chip { border-color: var(--accent); }
     #niBody { font-size: 17px; font-weight: 700; white-space: pre-wrap; word-break: break-all; margin: 6px 0; }
@@ -846,6 +871,7 @@
 
     <div id="msg"></div>
     <div id="suggest"></div>
+    <button type="button" id="noteToggle" style="display:none">書き込みを隠す</button>
   </div>
 
   <!-- ============ 下段：操作バー（固定） ============ -->
@@ -879,14 +905,21 @@
     </div>
 
     <!-- 図面への書き込み。道具を選んでから図面をタップ／なぞる -->
-    <div class="bar" id="barEdit">
-      <button type="button" id="edZoomOut" class="ghost zm" aria-label="縮小">−</button>
-      <button type="button" id="edZoomIn" class="ghost zm" aria-label="拡大">＋</button>
-      <button type="button" id="toolNote" class="ghost tool">メモ</button>
-      <button type="button" id="toolMark" class="ghost tool">マーカー</button>
-      <button type="button" id="toolErase" class="ghost tool">消す</button>
-      <div class="grow"></div>
-      <button type="button" id="btnEditDone" class="lbl">終わる</button>
+    <div class="bar barTwo" id="barEdit">
+      <div class="line">
+        <button type="button" id="toolNote" class="ghost tool">メモ</button>
+        <button type="button" id="toolMark" class="ghost tool">マーカー</button>
+        <button type="button" id="toolRing" class="ghost tool">囲む</button>
+        <button type="button" id="toolErase" class="ghost tool">消す</button>
+      </div>
+      <div class="line">
+        <button type="button" id="edZoomOut" class="ghost zm" aria-label="縮小">−</button>
+        <button type="button" id="edZoomIn" class="ghost zm" aria-label="拡大">＋</button>
+        <div class="colorGroup" id="colorGroup"></div>
+        <div class="grow"></div>
+        <button type="button" id="btnUndo" class="ghost undo" disabled>↶ 戻す</button>
+        <button type="button" id="btnEditDone" class="done">終わる</button>
+      </div>
     </div>
 
     <!-- 検査中は図面を拡大しながら判定するので、二段にして両方を出す -->
@@ -1140,7 +1173,8 @@
      'saveProgress','btnSaveFinish','btnFinishBack',
      'detailPanel','dpTitle','dpZuban','dpName','dpBody','dpPhotos','btnDetailClose',
      'tabList','pdfWrap','noteSvg','noteLayer','btnEdit',
-     'barEdit','edZoomOut','edZoomIn','toolNote','toolMark','toolErase','btnEditDone',
+     'barEdit','edZoomOut','edZoomIn','toolNote','toolMark','toolRing','toolErase','btnEditDone',
+     'colorGroup','btnUndo','noteToggle',
      'notePanel','npTitle','noteChips','npText','btnNoteSave','btnNoteCancel',
      'noteInfoPanel','niTitle','niBody','niMeta','niStale','btnNiKeep','btnNiEdit','btnNiMove',
      'btnNiDelete','btnNiClose'
@@ -1169,6 +1203,7 @@
       ['camLayer','pdfLayer','frameLayer','listLayer','emptyLayer','photoLayer'].forEach(function (k) {
         el[k].classList.toggle('show', k === name);
       });
+      updateNoteToggle();     // 「書き込みを隠す」は図面を出している時だけ
     }
 
     function showBar(name) {
@@ -1315,6 +1350,8 @@
     // 検査中は判定ボタンを消したくないので、呼び出し側が指定できるようにしている。
     function showDrawing(info, barAfter) {
       currentPdf = info;
+      undoStack = [];           // 「1つ戻す」は開いている図面の中だけ
+      updateUndoBtn();
       var bar = barAfter || 'barPdf';
 
       if (!window.pdfjsLib) { useDriveViewer(info, bar); return; }
@@ -1367,6 +1404,7 @@
         if (fitWidth) {
           var avail = el.pdfLayer.clientWidth - 16;
           if (avail > 0) pdfScale = avail / base.width;
+          fitScale = pdfScale;
         }
 
         var dpr = window.devicePixelRatio || 1;
@@ -1381,6 +1419,15 @@
         el.pdfWrap.style.height = canvas.style.height;
         var fs = Math.max(8, Math.min(15, (vp.width / dpr) * 0.016));
         el.pdfWrap.style.setProperty('--nfs', fs.toFixed(1) + 'px');
+
+        // 拡大縮小の前に見ていた点が、同じ場所に来るようにスクロールを合わせる
+        if (zoomAnchor) {
+          var a = zoomAnchor;
+          zoomAnchor = null;
+          var w = vp.width / dpr, h = vp.height / dpr;
+          el.pdfLayer.scrollLeft = el.pdfWrap.offsetLeft + a.nx * w - a.sx;
+          el.pdfLayer.scrollTop = el.pdfWrap.offsetTop + a.ny * h - a.sy;
+        }
 
         // 書き込みはページの幅を 1000 とした座標で描く（高さはページの縦横比で決まる）
         pageAspect = base.height / base.width;
@@ -1405,10 +1452,32 @@
       if (pdfDoc) el.pageInfo.textContent = pdfPageNo + '/' + pdfDoc.numPages;
     }
 
-    function zoomBy(f) {
+    // 拡大縮小の中心。画面上の点 (cx, cy) を指定しなければ、枠の真ん中を中心にする。
+    // 何もしないと拡大のたびに左上へ寄って、見ていた所を探し直すことになるため。
+    var zoomAnchor = null, fitScale = 1;
+
+    function zoomBy(f, cx, cy) {
       if (!pdfDoc) return;
+      var lr = el.pdfLayer.getBoundingClientRect();
+      var wr = el.pdfWrap.getBoundingClientRect();
+      if (cx === undefined) { cx = lr.left + lr.width / 2; cy = lr.top + lr.height / 2; }
+      if (wr.width && wr.height) {
+        zoomAnchor = {
+          nx: Math.min(1, Math.max(0, (cx - wr.left) / wr.width)),
+          ny: Math.min(1, Math.max(0, (cy - wr.top) / wr.height)),
+          sx: cx - lr.left,
+          sy: cy - lr.top
+        };
+      }
       pdfScale = Math.min(8, Math.max(0.2, pdfScale * f));
       renderPdfPage(false);
+    }
+
+    // ダブルタップ：拡大していなければ、その場所を中心に大きく。拡大中なら幅に戻す。
+    // 軍手やタッチペンでもできる（つまむ操作が要らない）
+    function doubleTapZoom(cx, cy) {
+      if (pdfScale > fitScale * 1.3) { renderPdfPage(true); return; }
+      zoomBy((fitScale * 2.5) / pdfScale, cx, cy);
     }
 
     el.zoomIn.onclick = function () { zoomBy(1.25); };
@@ -1445,12 +1514,14 @@
     // マーカーを持っている間は、なぞった跡を線にする。
     (function () {
       var dragging = false, moved = false, sx = 0, sy = 0, sl = 0, st = 0;
-      var stroke = null;      // マーカーで描いている途中の線 { pts, line }
+      var stroke = null;      // 描いている途中の線 { ring, p0, pts, line }
 
       el.pdfLayer.addEventListener('pointerdown', function (e) {
-        if (editTool === 'mark' && toNorm(e.clientX, e.clientY)) {
-          var p0 = toNorm(e.clientX, e.clientY);
-          stroke = { pts: [p0], line: makeMarkLine([p0], MARK_WIDTH, MARK_COLOR, '') };
+        var p0 = (editTool === 'mark' || editTool === 'ring') ? toNorm(e.clientX, e.clientY) : null;
+        if (p0) {
+          var ring = editTool === 'ring';
+          stroke = { ring: ring, p0: p0, pts: [p0],
+                     line: makeMarkLine([p0], ring ? RING_WIDTH : MARK_WIDTH, markColor, ring ? 'ring' : '') };
           el.noteSvg.appendChild(stroke.line);
           try { el.pdfLayer.setPointerCapture(e.pointerId); } catch (err) {}
           e.preventDefault();
@@ -1462,6 +1533,12 @@
       });
 
       el.pdfLayer.addEventListener('pointermove', function (e) {
+        if (stroke && stroke.ring) {
+          // 囲む：押した点から今の点までを対角にした楕円
+          stroke.pts = ellipsePts(stroke.p0, toNorm(e.clientX, e.clientY, true));
+          stroke.line.setAttribute('points', markPoints(stroke.pts));
+          return;
+        }
         if (stroke) {
           var p = toNorm(e.clientX, e.clientY, true);
           var last = stroke.pts[stroke.pts.length - 1];
@@ -1481,7 +1558,7 @@
         if (stroke) {
           var s = stroke;
           stroke = null;
-          if (e.type === 'pointercancel' || s.pts.length < 2) { s.line.remove(); return; }
+          if (e.type === 'pointercancel' || s.pts.length < 3) { s.line.remove(); return; }
           saveMark(s);
           return;
         }
@@ -1504,15 +1581,23 @@
     var noteZ = '';                 // 書き込みを問い合わせる図番
     var notes = [];                 // いま開いている図面の書き込み
     var pageAspect = 1.414;         // ページの縦 ÷ 横
-    var editTool = null;            // null | 'note' | 'mark' | 'erase'
+    var editTool = null;            // null | 'note' | 'mark' | 'ring' | 'erase'
     var moveNoteId = null;          // 「場所を移す」で次のタップを待っている書き込み
     var notePos = null;             // 新しいメモを置く場所
     var editingNote = null;         // 文字を直しているメモ
     var infoNote = null;            // 詳細を開いている書き込み
     var notesSeq = 0;               // 古い問い合わせの結果で上書きしないための番号
 
-    var MARK_COLOR = '#ffd600';     // 蛍光ペンの黄色
-    var MARK_WIDTH = 0.018;         // 線の太さ（ページ幅に対する割合）
+    var MARK_WIDTH = 0.018;         // 蛍光ペンの太さ（ページ幅に対する割合）
+    var RING_WIDTH = 0.005;         // 囲む線の太さ
+    // 色は意味で使い分ける。ボタンの並びもこの順
+    var MARK_COLORS = [
+      { c: '#ffd600', label: '黄', hint: '注意' },
+      { c: '#ff3b30', label: '赤', hint: '危険・重要' },
+      { c: '#2f80ed', label: '青', hint: '確認' }
+    ];
+    var markColor = MARK_COLORS[0].c;
+    var undoStack = [];             // この図面で自分がした操作（「1つ戻す」用）
     var NOTE_CHIPS = ['ジグ No. ', '注意: ', '歪みやすい', '溶接順に注意', '仮付けのみ'];
 
     var SVG_NS = 'http://www.w3.org/2000/svg';
@@ -1537,20 +1622,34 @@
       var line = document.createElementNS(SVG_NS, 'polyline');
       line.setAttribute('class', 'nmark ' + (cls || ''));
       line.setAttribute('points', markPoints(pts));
-      line.setAttribute('stroke', color || MARK_COLOR);
+      line.setAttribute('stroke', color || MARK_COLORS[0].c);
       line.setAttribute('stroke-width', String((w || MARK_WIDTH) * 1000));
       return line;
+    }
+
+    // 2 点を対角にした楕円を、点の並びにする（保存はマーカーと同じ形で済む）
+    function ellipsePts(a, b) {
+      var cx = (a[0] + b[0]) / 2, cy = (a[1] + b[1]) / 2;
+      var rx = Math.abs(b[0] - a[0]) / 2, ry = Math.abs(b[1] - a[1]) / 2;
+      var pts = [];
+      for (var i = 0; i <= 40; i++) {
+        var t = (i / 40) * Math.PI * 2;
+        pts.push([cx + rx * Math.cos(t), cy + ry * Math.sin(t)]);
+      }
+      return pts;
     }
 
     function renderNotes() {
       el.noteSvg.innerHTML = '';
       el.noteLayer.innerHTML = '';
+      updateNoteToggle();
 
       notes.forEach(function (n) {
         if (n.page !== pdfPageNo || !n.shape) return;
         var cls = (n.stale ? 'stale ' : '') + (n.pending ? 'pending' : '');
 
         if (n.kind === 'mark') {
+          if (n.shape.t === 'ring') cls += ' ring';
           var line = makeMarkLine(n.shape.pts, n.shape.w, n.color, cls);
           line.setAttribute('data-note', n.id);
           el.noteSvg.appendChild(line);
@@ -1603,13 +1702,23 @@
       return true;
     }
 
-    // 書き込みの送信。終わったら一覧を取り直して、ほかの人の書き込みも反映する
+    // 書き込みの送信。終わったら一覧を取り直して、ほかの人の書き込みも反映する。
+    // 成功した操作は「1つ戻す」で取り消せるよう、足した行と閉じた行を控えておく。
+    //   書く … 足した行を消せば戻る
+    //   直す … 足した行を消して、閉じた（置換にした）行を有効に戻す
+    //   消す … 閉じた（削除にした）行を有効に戻す
     function sendNote(payload, okText) {
       payload.worker = currentWorker;
       payload.z = noteZ;
       return apiPost(payload)
         .then(function (res) {
           if (!res || !res.ok) throw new Error((res && res.message) || '保存できませんでした');
+          var u = {
+            created: (payload.action !== 'noteDelete' && res.id) ? res.id : null,
+            closed: (payload.action !== 'noteAdd') ? payload.id : null
+          };
+          if (u.created || u.closed) undoStack.push(u);
+          updateUndoBtn();
           if (okText) showMsg(okText, 'info');
           return loadNotes();
         })
@@ -1619,14 +1728,56 @@
         });
     }
 
+    function updateUndoBtn() { el.btnUndo.disabled = !undoStack.length; }
+
+    el.btnUndo.onclick = function () {
+      var u = undoStack.pop();
+      updateUndoBtn();
+      if (!u || needWorker()) return;
+
+      var step = Promise.resolve({ ok: true });
+      if (u.created) {
+        step = step.then(function () {
+          return apiPost({ action: 'noteDelete', id: u.created, worker: currentWorker });
+        });
+      }
+      if (u.closed) {
+        step = step.then(function (r) {
+          if (!r || !r.ok) return r;
+          return apiPost({ action: 'noteRestore', id: u.closed, worker: currentWorker });
+        });
+      }
+      step.then(function (r) {
+        if (!r || !r.ok) throw new Error((r && r.message) || '');
+        showMsg('1つ戻しました。', 'info');
+      }).catch(function (err) {
+        showMsg('戻せませんでした。' + err.message, 'err');
+      }).then(loadNotes);
+    };
+
     function saveMark(s) {
       if (needWorker()) { s.line.remove(); return; }
       s.line.classList.add('pending');
+      var w = s.ring ? RING_WIDTH : MARK_WIDTH;
+      var shape = s.ring ? { pts: s.pts, w: w, t: 'ring' } : { pts: s.pts, w: w };
       notes.push({ id: 'tmp' + Date.now(), page: pdfPageNo, kind: 'mark', pending: true,
-                   shape: { pts: s.pts, w: MARK_WIDTH }, color: MARK_COLOR, text: '' });
-      sendNote({ action: 'noteAdd', kind: 'mark', page: pdfPageNo, color: MARK_COLOR,
-                 shape: { pts: s.pts, w: MARK_WIDTH } });
+                   shape: shape, color: markColor, text: '' });
+      sendNote({ action: 'noteAdd', kind: 'mark', page: pdfPageNo, color: markColor, shape: shape });
     }
+
+    // ---- 書き込みの表示／非表示（図面だけを見たい時）----
+    function updateNoteToggle() {
+      var n = (notes || []).filter(function (x) { return !x.pending; }).length;
+      var hidden = el.pdfLayer.classList.contains('hideNotes');
+      el.noteToggle.style.display = (n && el.pdfLayer.classList.contains('show')) ? '' : 'none';
+      el.noteToggle.textContent = hidden ? '書き込みを表示（' + n + '）' : '書き込みを隠す';
+      el.noteToggle.classList.toggle('off', hidden);
+    }
+
+    el.noteToggle.onclick = function () {
+      el.pdfLayer.classList.toggle('hideNotes');
+      updateNoteToggle();
+    };
 
     // 図面をタップした時。書き込みの上なら詳細、何もない所なら道具に応じて動く
     function onDrawingTap(e) {
@@ -1654,8 +1805,22 @@
         notePos = p;
         editingNote = null;
         openNoteEditor('メモを書く', '');
+        return;
+      }
+
+      // 道具を持っていない時の 2 回続けたタップ＝その場所を拡大（拡大中なら幅に戻す）
+      if (!editTool) {
+        var now = Date.now();
+        if (lastTap && now - lastTap.t < 400 &&
+            Math.abs(e.clientX - lastTap.x) < 30 && Math.abs(e.clientY - lastTap.y) < 30) {
+          lastTap = null;
+          doubleTapZoom(e.clientX, e.clientY);
+          return;
+        }
+        lastTap = { t: now, x: e.clientX, y: e.clientY };
       }
     }
+    var lastTap = null;
 
     function openNoteEditor(title, text) {
       el.npTitle.textContent = title;
@@ -1752,22 +1917,47 @@
       editTool = t;
       el.toolNote.classList.toggle('on', t === 'note');
       el.toolMark.classList.toggle('on', t === 'mark');
+      el.toolRing.classList.toggle('on', t === 'ring');
       el.toolErase.classList.toggle('on', t === 'erase');
-      el.pdfLayer.classList.toggle('drawing', t === 'mark');
+      el.pdfLayer.classList.toggle('drawing', t === 'mark' || t === 'ring');
       el.pdfLayer.classList.toggle('placing', t === 'note');
+      // 色は線を引く道具の時だけ意味があるので、その時だけ出す
+      el.colorGroup.classList.toggle('show', t === 'mark' || t === 'ring');
       var hint = {
         note: 'メモを付けたい場所をタップしてください。',
-        mark: '注意したい所を指やペンでなぞってください。（図面を動かす時は「＋」「−」か、道具を外す）',
-        erase: '消したいメモやマーカーをタップしてください。'
+        mark: '注意したい所を指やペンでなぞってください。（図面を動かす時は道具を外す）',
+        ring: '囲みたい所を、斜めになぞってください。（図面を動かす時は道具を外す）',
+        erase: '消したいメモや線をタップしてください。'
       }[t];
       if (hint) showMsg(hint, 'info'); else hideMsg();
     }
 
+    // 色のボタンを作る
+    MARK_COLORS.forEach(function (m) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'swatch' + (m.c === markColor ? ' on' : '');
+      b.style.background = m.c;
+      b.title = m.label + '（' + m.hint + '）';
+      b.setAttribute('aria-label', m.label + '（' + m.hint + '）');
+      b.onclick = function () {
+        markColor = m.c;
+        Array.prototype.forEach.call(el.colorGroup.children, function (x) {
+          x.classList.toggle('on', x === b);
+        });
+        showMsg(m.label + '：' + m.hint, 'info');
+      };
+      el.colorGroup.appendChild(b);
+    });
+
     el.btnEdit.onclick = function () {
       if (!pdfDoc || needWorker()) return;
+      el.pdfLayer.classList.remove('hideNotes');   // 隠したまま書くと重なりが分からない
+      updateNoteToggle();
       showBar('barEdit');
       setTool('note');
     };
+    el.toolRing.onclick = function () { setTool(editTool === 'ring' ? null : 'ring'); };
     el.btnEditDone.onclick = function () {
       setTool(null);
       moveNoteId = null;
