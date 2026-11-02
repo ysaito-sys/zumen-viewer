@@ -17,7 +17,7 @@
   <link rel="manifest" href="manifest.json">
   <!-- この版数は画面右上に出ます。古い版が動いていないか確認できます。
        更新したら必ずここも変えてください。 -->
-  <meta name="app-version" content="2026-09-11-01">
+  <meta name="app-version" content="2026-11-02-01">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -313,7 +313,86 @@
     /* 図面 */
     #pdfLayer { overflow: auto; -webkit-overflow-scrolling: touch; cursor: grab; touch-action: pan-x pan-y; }
     #pdfLayer.dragging { cursor: grabbing; }
-    #pdfCanvas { display: block; margin: 8px auto; background: #fff; box-shadow: 0 2px 14px rgba(0,0,0,.35); }
+    /* 図面と書き込みを同じ箱に重ねる。書き込みの位置は箱に対する割合（%）なので、
+       拡大縮小しても図面と一緒に動く */
+    #pdfWrap { position: relative; margin: 8px auto; box-shadow: 0 2px 14px rgba(0,0,0,.35); }
+    #pdfCanvas { display: block; background: #fff; }
+
+    /* ---- 書き込み（マーカー・メモ）---- */
+    #noteSvg {
+      position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+      overflow: visible; pointer-events: none;
+    }
+    /* 蛍光ペン。multiply で重ねると、下の線や文字が透けて読める */
+    #noteSvg .nmark {
+      fill: none; stroke-linecap: round; stroke-linejoin: round;
+      mix-blend-mode: multiply; opacity: .55;
+      pointer-events: visibleStroke;
+    }
+    #noteSvg .nmark.stale { opacity: .35; stroke-dasharray: 2 18; }
+    #noteLayer { position: absolute; inset: 0; pointer-events: none; }
+    .nnote {
+      position: absolute;
+      pointer-events: auto;
+      transform: translate(-7px, -7px);   /* 丸印の中心を、書いた点に合わせる */
+      display: flex; align-items: flex-start; gap: 4px;
+      max-width: 46%;
+      cursor: pointer;
+    }
+    .nnote .dot {
+      flex: none; width: 14px; height: 14px; border-radius: 50%;
+      background: #e53935; border: 2px solid #fff; box-shadow: 0 0 0 1px #e53935;
+    }
+    .nnote .tx {
+      margin-top: 8px;
+      padding: 4px 8px;
+      background: #fff59d; color: #1a1a1a;
+      border: 2px solid #e5b400; border-radius: 6px;
+      /* 図面を縮小して見ているときに文字が図面を覆わないよう、
+         表示中の図面の幅に合わせて大きさを変える（--nfs は描画のたびに入る） */
+      font-size: var(--nfs, 13px); font-weight: 700; line-height: 1.4;
+      white-space: pre-wrap; word-break: break-all;
+      box-shadow: 0 1px 4px rgba(0,0,0,.3);
+    }
+    .nnote.stale .tx { background: #fff; border-style: dashed; border-color: var(--warn); color: var(--warn); }
+    .nnote.stale .dot { background: #fff; box-shadow: 0 0 0 1px var(--warn); border-color: var(--warn); }
+    .nnote.pending { opacity: .6; }
+    /* 書き込み中は図面のスクロールを止め、指やペンの動きを線として拾う */
+    #pdfLayer.drawing { touch-action: none; cursor: crosshair; }
+    #pdfLayer.placing { cursor: crosshair; }
+    #pdfLayer.hideNotes #noteSvg, #pdfLayer.hideNotes #noteLayer { display: none; }
+
+    /* 書き込みの道具 */
+    #barEdit button { min-height: 56px; }
+    #barEdit button.tool { font-size: 15px; padding: 8px 12px; }
+    #barEdit button.tool.on { background: var(--accent); color: #fff; }
+    #barEdit button.zm { min-width: 52px; font-size: 22px; }
+    /* スマホ幅では道具が収まりきらないので詰める */
+    @media (max-width: 420px) {
+      #barEdit { gap: 4px; padding: 8px 6px; }
+      #barEdit button.tool, #barEdit #btnEditDone { font-size: 14px; padding: 8px 9px; }
+      #barEdit button.zm { min-width: 40px; padding: 8px 0; }
+    }
+    #noteChips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px; }
+    #noteChips .chip { border-color: var(--accent); }
+    #niBody { font-size: 17px; font-weight: 700; white-space: pre-wrap; word-break: break-all; margin: 6px 0; }
+    #niStale {
+      display: none; margin: 8px 0; padding: 10px 12px; border-radius: 8px;
+      background: #fff4e5; color: var(--warn); font-size: 14px; font-weight: 700; line-height: 1.6;
+    }
+    #niStale.show { display: block; }
+    #noteInfoPanel .row { flex-wrap: wrap; }
+
+    /* 図面一覧のカード */
+    .dwgCard .tags { display: flex; flex-wrap: wrap; gap: 6px; }
+    .dwgCard .tag {
+      font-size: 12px; font-weight: 700; padding: 2px 9px; border-radius: 999px;
+      background: #e8f1fb; color: var(--accent);
+    }
+    .dwgCard .tag.stale { background: #fff4e5; color: var(--warn); }
+    .dwgCard .tag.nopdf { background: #eceff1; color: var(--muted); }
+    .dwgCard:disabled { opacity: .55; }
+    .listHead { font-size: 13px; color: var(--muted); margin: 0 2px 10px; }
     #pdfFrame { width: 100%; height: 100%; border: 0; }
 
     /* 検査で見る写真。図面と同じ枠に出し、画面を切り替えないで済むようにする */
@@ -695,6 +774,7 @@
   <div class="modebar">
     <button type="button" id="tabWork" class="on">製造</button>
     <button type="button" id="tabInspect">検査<span class="badge" id="pendBadge"></span></button>
+    <button type="button" id="tabList">図面一覧</button>
   </div>
 
   <div id="workBar">
@@ -743,7 +823,13 @@
       <div class="scanHint">QR を枠いっぱいに写してください</div>
     </div>
 
-    <div class="layer" id="pdfLayer"><canvas id="pdfCanvas"></canvas></div>
+    <div class="layer" id="pdfLayer">
+      <div id="pdfWrap">
+        <canvas id="pdfCanvas"></canvas>
+        <svg id="noteSvg" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none"></svg>
+        <div id="noteLayer"></div>
+      </div>
+    </div>
     <div class="layer" id="frameLayer"><iframe id="pdfFrame" title="図面PDF"></iframe></div>
     <div class="layer" id="listLayer"></div>
 
@@ -782,6 +868,7 @@
       <span id="pdfZoomLabel">100%</span>
       <button type="button" id="zoomIn" class="ghost" aria-label="拡大">＋</button>
       <button type="button" id="fitWidth" class="ghost lbl">幅</button>
+      <button type="button" id="btnEdit" class="ghost lbl">書込</button>
       <div class="grow"></div>
       <div class="pageGroup" id="pageGroup">
         <button type="button" id="pagePrev" class="ghost" aria-label="前のページ">◀</button>
@@ -789,6 +876,17 @@
         <button type="button" id="pageNext" class="ghost" aria-label="次のページ">▶</button>
       </div>
       <button type="button" id="btnBackScan" class="ghost lbl">読取</button>
+    </div>
+
+    <!-- 図面への書き込み。道具を選んでから図面をタップ／なぞる -->
+    <div class="bar" id="barEdit">
+      <button type="button" id="edZoomOut" class="ghost zm" aria-label="縮小">−</button>
+      <button type="button" id="edZoomIn" class="ghost zm" aria-label="拡大">＋</button>
+      <button type="button" id="toolNote" class="ghost tool">メモ</button>
+      <button type="button" id="toolMark" class="ghost tool">マーカー</button>
+      <button type="button" id="toolErase" class="ghost tool">消す</button>
+      <div class="grow"></div>
+      <button type="button" id="btnEditDone" class="lbl">終わる</button>
     </div>
 
     <!-- 検査中は図面を拡大しながら判定するので、二段にして両方を出す -->
@@ -895,6 +993,42 @@
     </div>
   </div>
 
+  <!-- メモを書く／直す -->
+  <div class="panel" id="notePanel">
+    <div class="sheetbox">
+      <h2 id="npTitle">メモを書く</h2>
+      <div class="targetSub">図面を開いた人は全員この内容を見られます。</div>
+      <div id="noteChips"></div>
+      <textarea id="npText" rows="3" placeholder="例: ジグ J-12 を使う ／ ここは歪みやすい"></textarea>
+      <div class="row">
+        <button type="button" id="btnNoteSave">保存</button>
+        <button type="button" id="btnNoteCancel" class="ghost">やめる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 書き込みを押したときに出る。改定前のものはここで「有効」か「消す」を選ぶ -->
+  <div class="panel" id="noteInfoPanel">
+    <div class="sheetbox">
+      <h2 id="niTitle">メモ</h2>
+      <div id="niBody"></div>
+      <div class="targetSub" id="niMeta"></div>
+      <div id="niStale">
+        図面が改定される前に書かれたものです。<br>
+        今の図面でも場所と内容が正しいか確かめてください。
+      </div>
+      <div class="row">
+        <button type="button" id="btnNiKeep">このまま有効</button>
+        <button type="button" id="btnNiEdit" class="ghost">直す</button>
+        <button type="button" id="btnNiMove" class="ghost">場所を移す</button>
+      </div>
+      <div class="row">
+        <button type="button" id="btnNiDelete" class="ghost" style="color:var(--err);border-color:var(--err)">消す</button>
+        <button type="button" id="btnNiClose" class="ghost">閉じる</button>
+      </div>
+    </div>
+  </div>
+
   <div class="panel" id="detailPanel">
     <div class="sheetbox">
       <h2 id="dpTitle">図番の詳細</h2>
@@ -916,6 +1050,14 @@
     'use strict';
 
     var API_URL = 'https://script.google.com/macros/s/AKfycbyWwUYgqajwvYeOTNkA-SAm5vVO5fx8cYSaduGjZxUJ9fFtdd7dOEu4X7r39jC8nmcfLw/exec';
+
+    // 手元の PC で試すとき（localhost）だけ、?apiurl=… で試験用の API に切り替えられる。
+    // 本番（GitHub Pages）では効かないので、現場の記録に試験データが混ざることはない。
+    (function () {
+      if (!/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) return;
+      var mm = location.search.match(/[?&]apiurl=([^&]+)/);
+      if (mm) API_URL = decodeURIComponent(mm[1]);
+    })();
 
     var APP_VERSION = (document.querySelector('meta[name="app-version"]') || {}).content || '(不明)';
     var diagLog = [];
@@ -996,7 +1138,12 @@
      'startPanel','spZuban','spName','spQtyHint','qtyMinus','qtyValue','qtyPlus','btnStart','btnViewOnly',
      'finishPanel','fpZuban','fpSub','btnAddProduct','btnAddSlip','photoFile','photoList','note',
      'saveProgress','btnSaveFinish','btnFinishBack',
-     'detailPanel','dpTitle','dpZuban','dpName','dpBody','dpPhotos','btnDetailClose'
+     'detailPanel','dpTitle','dpZuban','dpName','dpBody','dpPhotos','btnDetailClose',
+     'tabList','pdfWrap','noteSvg','noteLayer','btnEdit',
+     'barEdit','edZoomOut','edZoomIn','toolNote','toolMark','toolErase','btnEditDone',
+     'notePanel','npTitle','noteChips','npText','btnNoteSave','btnNoteCancel',
+     'noteInfoPanel','niTitle','niBody','niMeta','niStale','btnNiKeep','btnNiEdit','btnNiMove',
+     'btnNiDelete','btnNiClose'
     ].forEach(function (id) { el[id] = document.getElementById(id); });
 
     // ---- 状態 ----
@@ -1007,7 +1154,7 @@
     var photos = [], pendingKind = 'product';
     var currentWorker = '', workerList = [];
     var remindTimer = null;
-    var mode = 'work';                 // 'work' | 'inspect'
+    var mode = 'work';                 // 'work' | 'inspect' | 'list'
     var inspectItem = null;            // 検査で開いている行
 
     var STORE_WORK = 'zumen_currentWork', STORE_WORKER = 'zumen_worker';
@@ -1025,7 +1172,7 @@
     }
 
     function showBar(name) {
-      ['barScan','barCam','barPdf','barJudge'].forEach(function (k) {
+      ['barScan','barCam','barPdf','barJudge','barEdit'].forEach(function (k) {
         el[k].classList.toggle('show', k === name);
       });
     }
@@ -1033,7 +1180,7 @@
     // 重ねて出すパネルの一覧。開けっ放しは画面全体を覆ってタップを遮るので、
     // 場面が変わるときは必ず全部閉じる。
     var PANELS = ['workerPanel','startPanel','finishPanel','photoPanel',
-                  'detailPanel','pausePanel','diagPanel'];
+                  'detailPanel','pausePanel','diagPanel','notePanel','noteInfoPanel'];
 
     function closeAllPanels() {
       PANELS.forEach(function (k) { if (el[k]) el[k].className = 'panel'; });
@@ -1113,6 +1260,7 @@
       el.searchRow.className = 'hide';       // 図面を出したら検索欄は畳む
 
       if (res.pdf) {
+        noteZ = currentRow ? currentRow.zuban : res.key;
         showDrawing(res.pdf);
         if (currentRow) addHistoryless(currentRow.zuban);
         if (currentRow && !currentWork && mode === 'work') openStartPanel(currentRow);
@@ -1188,6 +1336,7 @@
           el.pageGroup.className = doc.numPages > 1 ? 'pageGroup show' : 'pageGroup';
           hideMsg();
           renderPdfPage(true);
+          loadNotes();
         })
         .catch(function () { useDriveViewer(info, bar); });
     }
@@ -1228,6 +1377,15 @@
         canvas.height = Math.floor(vp.height);
         canvas.style.width = Math.floor(vp.width / dpr) + 'px';
         canvas.style.height = Math.floor(vp.height / dpr) + 'px';
+        el.pdfWrap.style.width = canvas.style.width;
+        el.pdfWrap.style.height = canvas.style.height;
+        var fs = Math.max(8, Math.min(15, (vp.width / dpr) * 0.016));
+        el.pdfWrap.style.setProperty('--nfs', fs.toFixed(1) + 'px');
+
+        // 書き込みはページの幅を 1000 とした座標で描く（高さはページの縦横比で決まる）
+        pageAspect = base.height / base.width;
+        el.noteSvg.setAttribute('viewBox', '0 0 1000 ' + (1000 * pageAspect));
+        renderNotes();
 
         updatePdfLabels();
 
@@ -1274,34 +1432,423 @@
     };
     el.pagePrev.onclick = function () { if (pdfDoc && pdfPageNo > 1) { pdfPageNo--; renderPdfPage(false); } };
     el.pageNext.onclick = function () { if (pdfDoc && pdfPageNo < pdfDoc.numPages) { pdfPageNo++; renderPdfPage(false); } };
+    // 一覧から開いたときは「一覧」に戻る。それ以外は読み取りに戻る
     el.btnBackScan.onclick = function () {
+      if (mode === 'list') { showDrawingList(); return; }
       el.searchRow.className = '';
       showLayer('emptyLayer');
       showBar('barScan');
     };
 
-    // タッチペンでも図面を動かせるようにする
+    // タッチペンでも図面を動かせるようにする。
+    // 動かさずに離したら「タップ」として、書き込みを開く／置く操作に回す。
+    // マーカーを持っている間は、なぞった跡を線にする。
     (function () {
-      var dragging = false, sx = 0, sy = 0, sl = 0, st = 0;
+      var dragging = false, moved = false, sx = 0, sy = 0, sl = 0, st = 0;
+      var stroke = null;      // マーカーで描いている途中の線 { pts, line }
+
       el.pdfLayer.addEventListener('pointerdown', function (e) {
-        dragging = true; sx = e.clientX; sy = e.clientY;
+        if (editTool === 'mark' && toNorm(e.clientX, e.clientY)) {
+          var p0 = toNorm(e.clientX, e.clientY);
+          stroke = { pts: [p0], line: makeMarkLine([p0], MARK_WIDTH, MARK_COLOR, '') };
+          el.noteSvg.appendChild(stroke.line);
+          try { el.pdfLayer.setPointerCapture(e.pointerId); } catch (err) {}
+          e.preventDefault();
+          return;
+        }
+        dragging = true; moved = false; sx = e.clientX; sy = e.clientY;
         sl = el.pdfLayer.scrollLeft; st = el.pdfLayer.scrollTop;
         el.pdfLayer.classList.add('dragging');
       });
+
       el.pdfLayer.addEventListener('pointermove', function (e) {
+        if (stroke) {
+          var p = toNorm(e.clientX, e.clientY, true);
+          var last = stroke.pts[stroke.pts.length - 1];
+          // 細かすぎる点は捨てる（記録が重くならないように）
+          if (Math.abs(p[0] - last[0]) + Math.abs(p[1] - last[1]) < 0.002) return;
+          stroke.pts.push(p);
+          stroke.line.setAttribute('points', markPoints(stroke.pts));
+          return;
+        }
         if (!dragging) return;
+        if (Math.abs(e.clientX - sx) > 8 || Math.abs(e.clientY - sy) > 8) moved = true;
         el.pdfLayer.scrollLeft = sl - (e.clientX - sx);
         el.pdfLayer.scrollTop = st - (e.clientY - sy);
       });
-      function end() {
+
+      function end(e) {
+        if (stroke) {
+          var s = stroke;
+          stroke = null;
+          if (e.type === 'pointercancel' || s.pts.length < 2) { s.line.remove(); return; }
+          saveMark(s);
+          return;
+        }
         if (!dragging) return;
         dragging = false;
         el.pdfLayer.classList.remove('dragging');
+        if (e.type === 'pointerup' && !moved) onDrawingTap(e);
       }
       el.pdfLayer.addEventListener('pointerup', end);
       el.pdfLayer.addEventListener('pointercancel', end);
-      el.pdfLayer.addEventListener('pointerleave', end);
+      el.pdfLayer.addEventListener('pointerleave', function (e) { if (!stroke) end(e); });
     })();
+
+    // ===================================================================
+    // 図面への書き込み（メモ・マーカー）
+    // 現場が紙の図面に手で書いていた注意点やジグ番号を、全員で共有する。
+    // 位置はページに対する割合（0〜1）で持つので、拡大しても端末が違ってもずれない。
+    // 図面が改定されると、前の版の書き込みは「要確認」として点線で出る。
+    // ===================================================================
+    var noteZ = '';                 // 書き込みを問い合わせる図番
+    var notes = [];                 // いま開いている図面の書き込み
+    var pageAspect = 1.414;         // ページの縦 ÷ 横
+    var editTool = null;            // null | 'note' | 'mark' | 'erase'
+    var moveNoteId = null;          // 「場所を移す」で次のタップを待っている書き込み
+    var notePos = null;             // 新しいメモを置く場所
+    var editingNote = null;         // 文字を直しているメモ
+    var infoNote = null;            // 詳細を開いている書き込み
+    var notesSeq = 0;               // 古い問い合わせの結果で上書きしないための番号
+
+    var MARK_COLOR = '#ffd600';     // 蛍光ペンの黄色
+    var MARK_WIDTH = 0.018;         // 線の太さ（ページ幅に対する割合）
+    var NOTE_CHIPS = ['ジグ No. ', '注意: ', '歪みやすい', '溶接順に注意', '仮付けのみ'];
+
+    var SVG_NS = 'http://www.w3.org/2000/svg';
+
+    // 画面上の位置 → ページに対する割合。図面の外なら null（clamp なら端に寄せる）
+    function toNorm(cx, cy, clamp) {
+      var r = el.pdfWrap.getBoundingClientRect();
+      if (!r.width || !r.height) return null;
+      var x = (cx - r.left) / r.width, y = (cy - r.top) / r.height;
+      if (clamp) return [Math.min(1, Math.max(0, x)), Math.min(1, Math.max(0, y))];
+      if (x < 0 || x > 1 || y < 0 || y > 1) return null;
+      return [x, y];
+    }
+
+    function markPoints(pts) {
+      return pts.map(function (p) {
+        return (p[0] * 1000).toFixed(1) + ',' + (p[1] * 1000 * pageAspect).toFixed(1);
+      }).join(' ');
+    }
+
+    function makeMarkLine(pts, w, color, cls) {
+      var line = document.createElementNS(SVG_NS, 'polyline');
+      line.setAttribute('class', 'nmark ' + (cls || ''));
+      line.setAttribute('points', markPoints(pts));
+      line.setAttribute('stroke', color || MARK_COLOR);
+      line.setAttribute('stroke-width', String((w || MARK_WIDTH) * 1000));
+      return line;
+    }
+
+    function renderNotes() {
+      el.noteSvg.innerHTML = '';
+      el.noteLayer.innerHTML = '';
+
+      notes.forEach(function (n) {
+        if (n.page !== pdfPageNo || !n.shape) return;
+        var cls = (n.stale ? 'stale ' : '') + (n.pending ? 'pending' : '');
+
+        if (n.kind === 'mark') {
+          var line = makeMarkLine(n.shape.pts, n.shape.w, n.color, cls);
+          line.setAttribute('data-note', n.id);
+          el.noteSvg.appendChild(line);
+          return;
+        }
+
+        var d = document.createElement('div');
+        d.className = 'nnote ' + cls;
+        d.setAttribute('data-note', n.id);
+        d.style.left = (n.shape.x * 100) + '%';
+        d.style.top = (n.shape.y * 100) + '%';
+        d.innerHTML = '<span class="dot"></span><span class="tx"></span>';
+        d.lastChild.textContent = n.text;
+        el.noteLayer.appendChild(d);
+      });
+    }
+
+    function loadNotes() {
+      notes = [];
+      renderNotes();
+      if (!noteZ) return;
+
+      var seq = ++notesSeq;
+      return apiGet('?api=notes&z=' + encodeURIComponent(noteZ))
+        .then(function (res) {
+          if (seq !== notesSeq) return;
+          if (!res || !res.ok) { note('書き込みを読めず: ' + ((res && res.message) || '')); return; }
+          notes = res.notes || [];
+          renderNotes();
+
+          var stale = notes.filter(function (n) { return n.stale; }).length;
+          if (stale) {
+            showMsg('図面が改定されています。点線の書き込みが ' + stale +
+                    ' 件あります。押して「このまま有効」か「消す」を選んでください。', 'warn');
+          }
+        })
+        .catch(function () { note('書き込みの取得に失敗'); });
+    }
+
+    function findNote(id) {
+      for (var i = 0; i < notes.length; i++) if (notes[i].id === id) return notes[i];
+      return null;
+    }
+
+    // 書き込むには作業者が要る（誰が書いたかを残すため）
+    function needWorker() {
+      if (currentWorker) return false;
+      showMsg('書き込む前に、作業者を選んでください。', 'warn');
+      openWorkerPanel(currentWorker);
+      return true;
+    }
+
+    // 書き込みの送信。終わったら一覧を取り直して、ほかの人の書き込みも反映する
+    function sendNote(payload, okText) {
+      payload.worker = currentWorker;
+      payload.z = noteZ;
+      return apiPost(payload)
+        .then(function (res) {
+          if (!res || !res.ok) throw new Error((res && res.message) || '保存できませんでした');
+          if (okText) showMsg(okText, 'info');
+          return loadNotes();
+        })
+        .catch(function (err) {
+          showMsg('保存できませんでした: ' + err.message, 'err');
+          return loadNotes();
+        });
+    }
+
+    function saveMark(s) {
+      if (needWorker()) { s.line.remove(); return; }
+      s.line.classList.add('pending');
+      notes.push({ id: 'tmp' + Date.now(), page: pdfPageNo, kind: 'mark', pending: true,
+                   shape: { pts: s.pts, w: MARK_WIDTH }, color: MARK_COLOR, text: '' });
+      sendNote({ action: 'noteAdd', kind: 'mark', page: pdfPageNo, color: MARK_COLOR,
+                 shape: { pts: s.pts, w: MARK_WIDTH } });
+    }
+
+    // 図面をタップした時。書き込みの上なら詳細、何もない所なら道具に応じて動く
+    function onDrawingTap(e) {
+      var hit = e.target && e.target.closest ? e.target.closest('[data-note]') : null;
+      var p = toNorm(e.clientX, e.clientY);
+
+      if (moveNoteId && p) {
+        var id = moveNoteId;
+        moveNoteId = null;
+        el.pdfLayer.classList.remove('placing');
+        sendNote({ action: 'noteUpdate', id: id, shape: { x: p[0], y: p[1] } }, 'メモの場所を移しました。');
+        return;
+      }
+
+      if (hit) {
+        var n = findNote(hit.getAttribute('data-note'));
+        if (!n || n.pending) return;
+        if (editTool === 'erase') { deleteNote(n); return; }
+        openNoteInfo(n);
+        return;
+      }
+
+      if (editTool === 'note' && p) {
+        if (needWorker()) return;
+        notePos = p;
+        editingNote = null;
+        openNoteEditor('メモを書く', '');
+      }
+    }
+
+    function openNoteEditor(title, text) {
+      el.npTitle.textContent = title;
+      el.npText.value = text;
+      el.noteChips.innerHTML = '';
+      NOTE_CHIPS.forEach(function (c) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'chip';
+        b.textContent = c.trim();
+        b.onclick = function () {
+          el.npText.value = (el.npText.value ? el.npText.value + ' ' : '') + c;
+          el.npText.focus();
+        };
+        el.noteChips.appendChild(b);
+      });
+      el.notePanel.className = 'panel show';
+      setTimeout(function () { el.npText.focus(); }, 50);
+    }
+
+    el.btnNoteCancel.onclick = function () { el.notePanel.className = 'panel'; };
+    el.btnNoteSave.onclick = function () {
+      var text = el.npText.value.trim();
+      if (!text) { el.npText.focus(); return; }
+      el.notePanel.className = 'panel';
+
+      if (editingNote) {
+        sendNote({ action: 'noteUpdate', id: editingNote.id, text: text }, 'メモを直しました。');
+        editingNote = null;
+        return;
+      }
+      if (!notePos) return;
+      notes.push({ id: 'tmp' + Date.now(), page: pdfPageNo, kind: 'note', pending: true,
+                   shape: { x: notePos[0], y: notePos[1] }, text: text });
+      renderNotes();
+      sendNote({ action: 'noteAdd', kind: 'note', page: pdfPageNo, text: text,
+                 shape: { x: notePos[0], y: notePos[1] } });
+      notePos = null;
+    };
+
+    function fmtDate(ms) {
+      if (!ms) return '';
+      var d = new Date(ms);
+      return (d.getMonth() + 1) + '/' + d.getDate() + ' ' +
+             ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+    }
+
+    function openNoteInfo(n) {
+      infoNote = n;
+      var isMark = n.kind === 'mark';
+      el.niTitle.textContent = isMark ? 'マーカー' : 'メモ';
+      el.niBody.textContent = isMark ? '（蛍光ペンの線）' : n.text;
+      el.niMeta.textContent = '書いた人: ' + (n.author || '—') + '　' + fmtDate(n.createdAt);
+      el.niStale.className = n.stale ? 'show' : '';
+      el.btnNiKeep.style.display = n.stale ? '' : 'none';
+      el.btnNiEdit.style.display = isMark ? 'none' : '';
+      el.btnNiMove.style.display = isMark ? 'none' : '';
+      el.noteInfoPanel.className = 'panel show';
+    }
+
+    el.btnNiClose.onclick = function () { el.noteInfoPanel.className = 'panel'; };
+    el.btnNiKeep.onclick = function () {
+      el.noteInfoPanel.className = 'panel';
+      if (!infoNote || needWorker()) return;
+      sendNote({ action: 'noteUpdate', id: infoNote.id }, '今の図面でも有効にしました。');
+    };
+    el.btnNiEdit.onclick = function () {
+      el.noteInfoPanel.className = 'panel';
+      if (!infoNote || needWorker()) return;
+      editingNote = infoNote;
+      openNoteEditor('メモを直す', infoNote.text);
+    };
+    el.btnNiMove.onclick = function () {
+      el.noteInfoPanel.className = 'panel';
+      if (!infoNote || needWorker()) return;
+      moveNoteId = infoNote.id;
+      el.pdfLayer.classList.add('placing');
+      showMsg('新しい場所をタップしてください。', 'info');
+    };
+    el.btnNiDelete.onclick = function () {
+      el.noteInfoPanel.className = 'panel';
+      if (infoNote) deleteNote(infoNote);
+    };
+
+    function deleteNote(n) {
+      if (needWorker()) return;
+      var what = n.kind === 'mark' ? 'このマーカー' : '「' + n.text + '」';
+      if (!confirm(what + 'を消しますか？\n（消した記録は残るので、あとから戻せます）')) return;
+      sendNote({ action: 'noteDelete', id: n.id }, '消しました。');
+    }
+
+    // ---- 書き込みの道具 ----
+    function setTool(t) {
+      editTool = t;
+      el.toolNote.classList.toggle('on', t === 'note');
+      el.toolMark.classList.toggle('on', t === 'mark');
+      el.toolErase.classList.toggle('on', t === 'erase');
+      el.pdfLayer.classList.toggle('drawing', t === 'mark');
+      el.pdfLayer.classList.toggle('placing', t === 'note');
+      var hint = {
+        note: 'メモを付けたい場所をタップしてください。',
+        mark: '注意したい所を指やペンでなぞってください。（図面を動かす時は「＋」「−」か、道具を外す）',
+        erase: '消したいメモやマーカーをタップしてください。'
+      }[t];
+      if (hint) showMsg(hint, 'info'); else hideMsg();
+    }
+
+    el.btnEdit.onclick = function () {
+      if (!pdfDoc || needWorker()) return;
+      showBar('barEdit');
+      setTool('note');
+    };
+    el.btnEditDone.onclick = function () {
+      setTool(null);
+      moveNoteId = null;
+      showBar('barPdf');
+    };
+    el.toolNote.onclick = function () { setTool(editTool === 'note' ? null : 'note'); };
+    el.toolMark.onclick = function () { setTool(editTool === 'mark' ? null : 'mark'); };
+    el.toolErase.onclick = function () { setTool(editTool === 'erase' ? null : 'erase'); };
+    el.edZoomIn.onclick = function () { zoomBy(1.25); };
+    el.edZoomOut.onclick = function () { zoomBy(0.8); };
+
+    // 重なったメッセージは押せば消える（図面の上を塞がないように）
+    el.msg.addEventListener('click', hideMsg);
+
+    // ===================================================================
+    // 図面一覧（QR なしで図面を開く）
+    // ===================================================================
+    var drawingList = null;
+
+    function showDrawingList() {
+      setTool(null);
+      el.infoBar.className = '';
+      el.searchRow.className = '';
+      el.q.placeholder = '図番・名称で絞り込み';
+      showLayer('listLayer');
+      showBar('barScan');
+      el.barScan.classList.remove('show');     // 一覧では読み取りは使わない
+      if (drawingList) renderDrawingList(); else loadDrawingList();
+    }
+
+    function loadDrawingList() {
+      el.listLayer.innerHTML = '<div class="pendEmpty">読み込んでいます…</div>';
+      apiGet('?api=drawings')
+        .then(function (res) {
+          if (!res || !res.ok) throw new Error((res && res.message) || '');
+          drawingList = res.items || [];
+          if (mode === 'list') renderDrawingList();
+        })
+        .catch(function () {
+          el.listLayer.innerHTML = '<div class="pendEmpty">読み込めませんでした。<br>通信環境を確認してください。</div>';
+        });
+    }
+
+    function renderDrawingList() {
+      // 表記ゆれ（全角・ハイフン・空白）を無視して絞り込む
+      var flat = function (s) {
+        return String(s || '').replace(/[Ａ-Ｚａ-ｚ０-９]/g, function (c) {
+          return String.fromCharCode(c.charCodeAt(0) - 0xFEE0);
+        }).toUpperCase().replace(/[\s\-_\/－]/g, '');
+      };
+      var q = flat(el.q.value);
+      var items = (drawingList || []).filter(function (it) {
+        return !q || flat(it.zuban + it.name + it.model).indexOf(q) >= 0;
+      });
+
+      el.listLayer.innerHTML = '';
+      var head = document.createElement('div');
+      head.className = 'listHead';
+      head.textContent = items.length + ' 件' + (q ? '（絞り込み中）' : '') +
+                         '　書き込みのある図面には件数が出ます';
+      el.listLayer.appendChild(head);
+
+      items.forEach(function (it) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'pendCard dwgCard';
+        b.disabled = !it.hasPdf;
+        var tags = '';
+        if (!it.hasPdf) tags += '<span class="tag nopdf">PDF未登録</span>';
+        if (it.notes) tags += '<span class="tag">書き込み ' + it.notes + '</span>';
+        if (it.stale) tags += '<span class="tag stale">改定・要確認 ' + it.stale + '</span>';
+        b.innerHTML =
+          '<span class="zb">' + esc(it.zuban) + '</span>' +
+          '<span class="meta">' + esc([it.name, it.model].filter(Boolean).join('　') || '—') + '</span>' +
+          (tags ? '<span class="tags">' + tags + '</span>' : '');
+        b.onclick = function () { doSearch(it.zuban); };
+        el.listLayer.appendChild(b);
+      });
+    }
+
+    el.q.addEventListener('input', function () { if (mode === 'list' && drawingList) renderDrawingList(); });
 
     window.addEventListener('resize', function () {
       if (pdfDoc && el.pdfLayer.className.indexOf('show') >= 0) renderPdfPage(true);
@@ -1924,16 +2471,28 @@
     function setMode(m) {
       mode = m;
       var ins = (m === 'inspect');
-      el.tabWork.className = ins ? '' : 'on';
+      el.tabWork.className = (m === 'work') ? 'on' : '';
       el.tabInspect.className = ins ? 'on' : '';
+      el.tabList.className = (m === 'list') ? 'on' : '';
 
       if (scanning) stopScan();
+      setTool(null);
+      moveNoteId = null;
       hideMsg();
       el.suggest.className = '';
       inspectItem = null;
       closeAllPanels();     // 開いたままのパネルがタップを遮らないようにする
 
-      if (ins) {
+      // 一覧から開いた図面は「一覧」に戻り、製造では「読取」に戻る
+      el.btnBackScan.textContent = (m === 'list') ? '一覧' : '読取';
+      el.q.placeholder = '図番を入力（例: A5-0921）';
+
+      if (m === 'list') {
+        el.workBar.classList.remove('show');   // paused の指定は残す
+        el.wbRemind.className = '';
+        el.q.value = '';
+        showDrawingList();
+      } else if (ins) {
         el.searchRow.className = 'hide';
         el.infoBar.className = '';
         el.workBar.classList.remove('show');   // paused の指定は残す
@@ -1952,6 +2511,11 @@
 
     el.tabWork.onclick = function () { setMode('work'); };
     el.tabInspect.onclick = function () { setMode('inspect'); };
+    el.tabList.onclick = function () {
+      // 一覧を開くたびに読み直す（ほかの人の書き込みや、追加された図面を反映する）
+      drawingList = null;
+      setMode('list');
+    };
 
     function loadPending() {
       el.listLayer.innerHTML = '<div class="pendEmpty">読み込んでいます…</div>';
@@ -2029,6 +2593,7 @@
         .then(function (res) {
           if (res && res.ok && res.pdf) {
             currentRow = (res.rows && res.rows[0]) || null;
+            noteZ = item.zuban;
             // 読み込み後も判定バーを保つ（図面用に切り替わらないようにする）
             showDrawing(res.pdf, 'barJudge');
           } else {
